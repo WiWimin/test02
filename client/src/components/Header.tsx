@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { PawPrint, Bell, Menu, X, ChevronDown, Shield } from 'lucide-react'
+import { PawPrint, Bell, Menu, X } from 'lucide-react'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
@@ -28,7 +28,6 @@ export default function Header() {
           <a href="#guarantees" className="nav-link" onClick={() => setMobileOpen(false)}>保障</a>
           <a href="#reviews" className="nav-link" onClick={() => setMobileOpen(false)}>评价</a>
           <div className="nav-auth">
-            <Link to="/admin/dashboard" className="nav-link nav-admin"><Shield size={14} /> 管理后台</Link>
             <Link to="/login" className="nav-link nav-login">登录</Link>
             <Link to="/register" className="btn btn-primary nav-register">免费注册</Link>
           </div>

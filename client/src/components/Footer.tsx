@@ -41,7 +41,7 @@ export default function Footer() {
             <div className="footer-col">
               <h4>关于</h4>
               <a href="#">关于我们</a>
-              <a href="#">服务者入驻</a>
+              <a href="/sitter/apply">服务者入驻</a>
               <a href="#">帮助中心</a>
               <a href="#">服务条款</a>
               <a href="#">隐私政策</a>

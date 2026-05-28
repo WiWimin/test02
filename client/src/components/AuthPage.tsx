@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  PawPrint, Phone, Lock, Eye, EyeOff, Loader2, ChevronRight,
-  ShieldCheck, ArrowLeft, CheckCircle2, XCircle, AlertCircle,
-  MessageCircle, Smartphone, CreditCard
+  PawPrint, Phone, Lock, Eye, EyeOff, Loader2,
+  ShieldCheck, ArrowLeft, CheckCircle2, XCircle,
+  MessageCircle, Smartphone, CreditCard, User as UserIcon
 } from 'lucide-react'
-import { login } from '../utils/auth'
+import { login, UserRole } from '../utils/auth'
+
+const roleLabels: Record<UserRole, string> = {
+  owner: '宠物主人',
+  sitter: '服务商',
+  admin: '管理员',
+}
 
 interface AuthPageProps {
   mode: 'login' | 'register'
 }
-
-/* ── Toast Component ── */
 
 function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t) }, [onClose])
@@ -34,8 +38,6 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
   )
 }
 
-/* ── Floating Paw Background ── */
-
 function AuthBg() {
   return (
     <div className="auth-bg">
@@ -52,30 +54,14 @@ function AuthBg() {
       <div className="auth-bg-glow glow-2" />
       <style>{`
         .auth-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
-        .auth-bg-paw {
-          position: absolute; opacity: 0.06;
-          animation: float 6s ease-in-out infinite;
-          animation-delay: calc(var(--i) * 0.7s);
-        }
-        .auth-bg-glow {
-          position: absolute; border-radius: 50%; filter: blur(60px);
-        }
-        .glow-1 {
-          width: 300px; height: 300px;
-          background: rgba(255,125,90,0.10);
-          top: -80px; right: -60px;
-        }
-        .glow-2 {
-          width: 250px; height: 250px;
-          background: rgba(69,183,160,0.08);
-          bottom: -60px; left: -60px;
-        }
+        .auth-bg-paw { position: absolute; opacity: 0.06; animation: float 6s ease-in-out infinite; animation-delay: calc(var(--i) * 0.7s); }
+        .auth-bg-glow { position: absolute; border-radius: 50%; filter: blur(60px); }
+        .glow-1 { width: 300px; height: 300px; background: rgba(255,125,90,0.10); top: -80px; right: -60px; }
+        .glow-2 { width: 250px; height: 250px; background: rgba(69,183,160,0.08); bottom: -60px; left: -60px; }
       `}</style>
     </div>
   )
 }
-
-/* ── Password Strength ── */
 
 function PasswordStrength({ password }: { password: string }) {
   const getStrength = (p: string): { level: number; label: string; color: string; pct: string } => {
@@ -94,20 +80,14 @@ function PasswordStrength({ password }: { password: string }) {
     ]
     return map[Math.min(score, map.length) - 1] || map[0]
   }
-
   const s = getStrength(password)
   if (!password) return null
-
   return (
     <div className="auth-pw-strength">
-      <div className="aps-bar">
-        <div className="aps-fill" style={{ width: s.pct, background: s.color }} />
-      </div>
+      <div className="aps-bar"><div className="aps-fill" style={{ width: s.pct, background: s.color }} /></div>
       <span className="aps-label" style={{ color: s.color }}>{s.label}</span>
       <style>{`
-        .auth-pw-strength {
-          display: flex; align-items: center; gap: 8px; margin-top: 8px;
-        }
+        .auth-pw-strength { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
         .aps-bar { flex: 1; height: 4px; background: var(--color-border); border-radius: 2px; overflow: hidden; }
         .aps-fill { height: 100%; border-radius: 2px; transition: all 0.3s ease; }
         .aps-label { font-size: 11px; font-weight: 600; min-width: 28px; text-align: right; }
@@ -122,11 +102,15 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirectTo = searchParams.get('redirect')
-  const [mode, setMode] = useState(initialMode)
+  const roleParam = searchParams.get('role') as UserRole | null
+  const modeParam = searchParams.get('mode') as 'login' | 'register' | null
+  const role: UserRole = roleParam || 'owner'
+  const [mode, setMode] = useState<'login' | 'register'>(modeParam || initialMode)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
   /* Login state */
+  const [loginAccount, setLoginAccount] = useState('')
   const [loginPhone, setLoginPhone] = useState('')
   const [loginPwd, setLoginPwd] = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -143,6 +127,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
   const [showRegConfirm, setShowRegConfirm] = useState(false)
   const [codeCountdown, setCodeCountdown] = useState(0)
   const [regErrors, setRegErrors] = useState<Record<string, string>>({})
+  const [assignedAccount, setAssignedAccount] = useState('')
 
   /* ── Validation ── */
 
@@ -151,14 +136,18 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
 
   const validateLogin = useCallback(() => {
     const errs: Record<string, string> = {}
-    const raw = loginPhone.replace(/\s/g, '')
-    if (!raw) errs.phone = '请输入手机号'
-    else if (!/^1\d{10}$/.test(raw)) errs.phone = '手机号格式不正确'
+    if (role === 'owner') {
+      const raw = loginPhone.replace(/\s/g, '')
+      if (!raw) errs.account = '请输入手机号'
+      else if (!/^1\d{10}$/.test(raw)) errs.account = '手机号格式不正确'
+    } else {
+      if (!loginAccount) errs.account = '请输入账号'
+    }
     if (!loginPwd) errs.password = '请输入密码'
     else if (loginPwd.length < 6) errs.password = '密码长度不足'
     setLoginErrors(errs)
     return Object.keys(errs).length === 0
-  }, [loginPhone, loginPwd])
+  }, [loginPhone, loginAccount, loginPwd, role])
 
   const validateRegister = useCallback(() => {
     const errs: Record<string, string> = {}
@@ -180,12 +169,18 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
 
   const doRedirect = () => {
     const pending = sessionStorage.getItem('pendingBooking')
-    if (pending) {
+    if (pending && role === 'owner') {
       sessionStorage.removeItem('pendingBooking')
       const state = JSON.parse(pending)
       navigate('/booking/new', { state })
     } else if (redirectTo) {
       navigate(redirectTo)
+    } else if (role === 'owner') {
+      navigate('/home/owner')
+    } else if (role === 'sitter') {
+      navigate('/sitter/dashboard')
+    } else if (role === 'admin') {
+      navigate('/admin/dashboard')
     } else {
       navigate('/')
     }
@@ -197,7 +192,14 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     setLoading(true)
     await new Promise(r => setTimeout(r, 1200))
     setLoading(false)
-    login('mock-token-' + Date.now())
+    const accountId = role === 'owner' ? loginPhone.replace(/\s/g, '') : loginAccount
+    login({
+      id: 'u_' + Date.now(),
+      name: '用户' + accountId.slice(-4),
+      phone: accountId,
+      role,
+      avatar: '',
+    })
     setToast({ msg: '登录成功，欢迎回来！', type: 'success' })
     doRedirect()
   }
@@ -208,8 +210,16 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     setLoading(true)
     await new Promise(r => setTimeout(r, 1200))
     setLoading(false)
-    login('mock-token-' + Date.now())
-    setToast({ msg: '注册成功，欢迎加入！', type: 'success' })
+    const mockAccount = 'SC' + Date.now().toString().slice(-8)
+    setAssignedAccount(mockAccount)
+    login({
+      id: 'u_' + Date.now(),
+      name: '用户' + regPhone.slice(-4),
+      phone: regPhone.replace(/\s/g, ''),
+      role,
+      avatar: '',
+    })
+    setToast({ msg: `注册成功！您的账号为：${mockAccount}`, type: 'success' })
     doRedirect()
   }
 
@@ -225,76 +235,108 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     }, 1000)
   }
 
-  useEffect(() => { setMode(initialMode) }, [initialMode])
+  useEffect(() => { if (modeParam) setMode(modeParam); else setMode(initialMode) }, [initialMode, modeParam])
+
+  const switchMode = (newMode: 'login' | 'register') => {
+    setMode(newMode)
+    const params = new URLSearchParams(searchParams)
+    params.set('mode', newMode)
+    navigate({ search: params.toString() }, { replace: true })
+  }
+
+  const goBackRoleSelect = () => {
+    let path = role === 'admin' ? '/login' : `/login`
+    if (redirectTo) path += `?redirect=${encodeURIComponent(redirectTo)}`
+    navigate(path)
+  }
+
+  const isOwner = role === 'owner'
+  const isSitter = role === 'sitter'
+  const isAdmin = role === 'admin'
+  const showRegisterTab = !isAdmin
+  const showSocialLogin = isOwner
+  const showSwitchToRegister = !isAdmin
+  const showSwitchToLogin = !isAdmin
 
   return (
     <div className="auth-page">
       <AuthBg />
-
-      {/* Back button (only on mobile) */}
-      <button className="auth-mobile-back" onClick={() => navigate(-1)}>
+      <button className="auth-mobile-back" onClick={goBackRoleSelect}>
         <ArrowLeft size={20} />
       </button>
 
       <div className="auth-container">
         <div className="auth-card">
-          {/* Logo */}
           <div className="auth-logo">
             <div className="auth-logo-icon"><PawPrint size={22} weight="fill" /></div>
             <span className="auth-logo-text">PetCare</span>
           </div>
 
-          {/* Title */}
-          <h1 className="auth-title">{mode === 'login' ? '欢迎回来' : '创建账号'}</h1>
+          <div className="auth-title-row">
+            <button className="auth-role-back" onClick={goBackRoleSelect} title="切换身份">
+              <ArrowLeft size={18} />
+            </button>
+            <h1 className="auth-title">{mode === 'login' ? '欢迎回来' : '创建账号'}</h1>
+          </div>
           <p className="auth-subtitle">
-            {mode === 'login' ? '登录您的账号，继续享受贴心服务' : '注册后享新人优惠券礼包 🎁'}
+            {mode === 'login' ? `登录您的${roleLabels[role]}账号` : `注册${roleLabels[role]}账号`}
           </p>
 
-          {/* Mode Tabs */}
-          <div className="auth-tabs">
-            <button className={`auth-tab ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>
-              登录
-            </button>
-            <button className={`auth-tab ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>
-              注册
-            </button>
+          <div className="auth-role-badge">
+            <span>{roleLabels[role]}</span>
+            <button className="auth-role-change" onClick={goBackRoleSelect}>切换身份</button>
           </div>
 
-          {/* ── Login Form ── */}
-          <form
-            className={`auth-form ${mode === 'login' ? 'visible' : 'hidden'}`}
-            onSubmit={handleLogin}
-            noValidate
-          >
-            <div className={`auth-field ${loginErrors.phone ? 'error' : ''}`}>
-              <div className="af-icon"><Phone size={18} /></div>
-              <input
-                type="tel" placeholder="请输入手机号" autoComplete="tel"
-                value={loginPhone} onChange={e => setLoginPhone(formatPhone(e.target.value))}
-                onFocus={() => setLoginErrors(prev => { const { phone, ...r } = prev; return r })}
-              />
-              {loginErrors.phone && <span className="af-error">{loginErrors.phone}</span>}
+          {/* Mode Tabs — hidden for admin */}
+          {showRegisterTab && (
+            <div className="auth-tabs">
+              <button className={`auth-tab ${mode === 'login' ? 'active' : ''}`} onClick={() => switchMode('login')}>登录</button>
+              <button className={`auth-tab ${mode === 'register' ? 'active' : ''}`} onClick={() => switchMode('register')}>注册</button>
             </div>
+          )}
 
+          {/* ── Login Form ── */}
+          <form className={`auth-form ${mode === 'login' ? 'visible' : 'hidden'}`} onSubmit={handleLogin} noValidate>
+            {/* Account / Phone field — differs by role */}
+            {isOwner ? (
+              <div className={`auth-field ${loginErrors.account ? 'error' : ''}`}>
+                <div className="af-icon"><Phone size={18} /></div>
+                <input type="tel" placeholder="请输入手机号" autoComplete="tel"
+                  value={loginPhone} onChange={e => setLoginPhone(formatPhone(e.target.value))}
+                  onFocus={() => setLoginErrors(prev => { const { account, ...r } = prev; return r })} />
+                {loginErrors.account && <span className="af-error">{loginErrors.account}</span>}
+              </div>
+            ) : (
+              <div className={`auth-field ${loginErrors.account ? 'error' : ''}`}>
+                <div className="af-icon"><UserIcon size={18} /></div>
+                <input type="text" placeholder="请输入账号" autoComplete="username"
+                  value={loginAccount} onChange={e => setLoginAccount(e.target.value)}
+                  onFocus={() => setLoginErrors(prev => { const { account, ...r } = prev; return r })} />
+                {loginErrors.account && <span className="af-error">{loginErrors.account}</span>}
+              </div>
+            )}
+
+            {/* Password field */}
             <div className={`auth-field ${loginErrors.password ? 'error' : ''}`}>
               <div className="af-icon"><Lock size={18} /></div>
-              <input
-                type={showPwd ? 'text' : 'password'} placeholder="请输入密码" autoComplete="current-password"
+              <input type={showPwd ? 'text' : 'password'} placeholder="请输入密码" autoComplete="current-password"
                 value={loginPwd} onChange={e => setLoginPwd(e.target.value)}
-                onFocus={() => setLoginErrors(prev => { const { password, ...r } = prev; return r })}
-              />
+                onFocus={() => setLoginErrors(prev => { const { password, ...r } = prev; return r })} />
               <button type="button" className="af-toggle" onClick={() => setShowPwd(!showPwd)}>
                 {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
               {loginErrors.password && <span className="af-error">{loginErrors.password}</span>}
             </div>
 
+            {/* Remember me + forgot password — show for owner, forgot only for sitter */}
             <div className="auth-row">
-              <label className="auth-checkbox">
-                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
-                <span className="ac-custom" />
-                <span>记住我</span>
-              </label>
+              {isOwner && (
+                <label className="auth-checkbox">
+                  <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                  <span className="ac-custom" />
+                  <span>记住我</span>
+                </label>
+              )}
               <button type="button" className="auth-link" onClick={() => alert('忘记密码功能')}>忘记密码？</button>
             </div>
 
@@ -302,114 +344,110 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
               {loading ? <Loader2 size={20} className="spin" /> : '登  录'}
             </button>
 
-            <div className="auth-social">
-              <div className="as-divider"><span>或使用以下方式登录</span></div>
-              <div className="as-btns">
-                <button type="button" className="as-btn wechat"><MessageCircle size={20} /> 微信</button>
-                <button type="button" className="as-btn alipay"><CreditCard size={20} /> 支付宝</button>
-                <button type="button" className="as-btn sms"><Smartphone size={20} /> 短信</button>
+            {/* Social login — owner only */}
+            {showSocialLogin && (
+              <div className="auth-social">
+                <div className="as-divider"><span>或使用以下方式登录</span></div>
+                <div className="as-btns">
+                  <button type="button" className="as-btn wechat"><MessageCircle size={20} /> 微信</button>
+                  <button type="button" className="as-btn alipay"><CreditCard size={20} /> 支付宝</button>
+                  <button type="button" className="as-btn sms"><Smartphone size={20} /> 短信</button>
+                </div>
               </div>
-            </div>
+            )}
 
-            <p className="auth-switch">
-              还没有账号？
-              <button type="button" className="auth-link" onClick={() => setMode('register')}>立即注册 →</button>
-            </p>
+            {/* Switch to register — not for admin */}
+            {showSwitchToRegister && (
+              <p className="auth-switch">
+                还没有账号？
+                <button type="button" className="auth-link" onClick={() => switchMode('register')}>立即注册 →</button>
+              </p>
+            )}
           </form>
 
-          {/* ── Register Form ── */}
-          <form
-            className={`auth-form ${mode === 'register' ? 'visible' : 'hidden'}`}
-            onSubmit={handleRegister}
-            noValidate
-          >
-            <div className={`auth-field ${regErrors.phone ? 'error' : ''}`}>
-              <div className="af-icon"><Phone size={18} /></div>
-              <input
-                type="tel" placeholder="请输入手机号" autoComplete="tel"
-                value={regPhone} onChange={e => setRegPhone(formatPhone(e.target.value))}
-                onFocus={() => setRegErrors(prev => { const { phone, ...r } = prev; return r })}
-              />
-              {regErrors.phone && <span className="af-error">{regErrors.phone}</span>}
-            </div>
-
-            <div className={`auth-field ${regErrors.code ? 'error' : ''}`}>
-              <div className="af-icon"><Smartphone size={18} /></div>
-              <input
-                type="text" placeholder="请输入验证码" autoComplete="one-time-code" maxLength={6}
-                value={regCode} onChange={e => setRegCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                onFocus={() => setRegErrors(prev => { const { code, ...r } = prev; return r })}
-              />
-              <button type="button" className="af-code-btn" onClick={sendCode} disabled={codeCountdown > 0}>
-                {codeCountdown > 0 ? `${codeCountdown}s` : '获取验证码'}
+          {/* ── Register Form — hidden for admin ── */}
+          {showRegisterTab && (
+            <form className={`auth-form ${mode === 'register' ? 'visible' : 'hidden'}`} onSubmit={handleRegister} noValidate>
+              <div className={`auth-field ${regErrors.phone ? 'error' : ''}`}>
+                <div className="af-icon"><Phone size={18} /></div>
+                <input type="tel" placeholder="请输入手机号" autoComplete="tel"
+                  value={regPhone} onChange={e => setRegPhone(formatPhone(e.target.value))}
+                  onFocus={() => setRegErrors(prev => { const { phone, ...r } = prev; return r })} />
+                {regErrors.phone && <span className="af-error">{regErrors.phone}</span>}
+              </div>
+              <div className={`auth-field ${regErrors.code ? 'error' : ''}`}>
+                <div className="af-icon"><Smartphone size={18} /></div>
+                <input type="text" placeholder="请输入验证码" autoComplete="one-time-code" maxLength={6}
+                  value={regCode} onChange={e => setRegCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onFocus={() => setRegErrors(prev => { const { code, ...r } = prev; return r })} />
+                <button type="button" className="af-code-btn" onClick={sendCode} disabled={codeCountdown > 0}>
+                  {codeCountdown > 0 ? `${codeCountdown}s` : '获取验证码'}
+                </button>
+                {regErrors.code && <span className="af-error">{regErrors.code}</span>}
+              </div>
+              <div className={`auth-field ${regErrors.password ? 'error' : ''}`}>
+                <div className="af-icon"><Lock size={18} /></div>
+                <input type={showRegPwd ? 'text' : 'password'} placeholder="设置密码（至少8位）" autoComplete="new-password"
+                  value={regPwd} onChange={e => setRegPwd(e.target.value)}
+                  onFocus={() => setRegErrors(prev => { const { password, ...r } = prev; return r })} />
+                <button type="button" className="af-toggle" onClick={() => setShowRegPwd(!showRegPwd)}>
+                  {showRegPwd ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+                {regErrors.password && <span className="af-error">{regErrors.password}</span>}
+                <PasswordStrength password={regPwd} />
+              </div>
+              <div className={`auth-field ${regErrors.confirm ? 'error' : ''}`}>
+                <div className="af-icon"><Lock size={18} /></div>
+                <input type={showRegConfirm ? 'text' : 'password'} placeholder="确认密码" autoComplete="new-password"
+                  value={regConfirm} onChange={e => setRegConfirm(e.target.value)}
+                  onFocus={() => setRegErrors(prev => { const { confirm, ...r } = prev; return r })} />
+                <button type="button" className="af-toggle" onClick={() => setShowRegConfirm(!showRegConfirm)}>
+                  {showRegConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+                {regErrors.confirm && <span className="af-error">{regErrors.confirm}</span>}
+              </div>
+              <div className={`auth-checkbox-wrap ${regErrors.agree ? 'error' : ''}`}>
+                <label className="auth-checkbox">
+                  <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
+                  <span className="ac-custom" />
+                  <span>我已阅读并同意 <button type="button" className="auth-link" onClick={() => alert('服务条款')}>《服务条款》</button> 和 <button type="button" className="auth-link" onClick={() => alert('隐私政策')}>《隐私政策》</button></span>
+                </label>
+                {regErrors.agree && <span className="af-error">{regErrors.agree}</span>}
+              </div>
+              <button type="submit" className={`auth-submit ${loading ? 'loading' : ''}`} disabled={loading}>
+                {loading ? <Loader2 size={20} className="spin" /> : '注  册'}
               </button>
-              {regErrors.code && <span className="af-error">{regErrors.code}</span>}
-            </div>
 
-            <div className={`auth-field ${regErrors.password ? 'error' : ''}`}>
-              <div className="af-icon"><Lock size={18} /></div>
-              <input
-                type={showRegPwd ? 'text' : 'password'} placeholder="设置密码（至少8位）" autoComplete="new-password"
-                value={regPwd} onChange={e => setRegPwd(e.target.value)}
-                onFocus={() => setRegErrors(prev => { const { password, ...r } = prev; return r })}
-              />
-              <button type="button" className="af-toggle" onClick={() => setShowRegPwd(!showRegPwd)}>
-                {showRegPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-              {regErrors.password && <span className="af-error">{regErrors.password}</span>}
-              <PasswordStrength password={regPwd} />
-            </div>
+              {/* Sitter: show assigned account hint after registration */}
+              {isSitter && assignedAccount && (
+                <div className="auth-account-hint">
+                  <CheckCircle2 size={14} /> 注册成功，您的账号为：<strong>{assignedAccount}</strong>
+                </div>
+              )}
 
-            <div className={`auth-field ${regErrors.confirm ? 'error' : ''}`}>
-              <div className="af-icon"><Lock size={18} /></div>
-              <input
-                type={showRegConfirm ? 'text' : 'password'} placeholder="确认密码" autoComplete="new-password"
-                value={regConfirm} onChange={e => setRegConfirm(e.target.value)}
-                onFocus={() => setRegErrors(prev => { const { confirm, ...r } = prev; return r })}
-              />
-              <button type="button" className="af-toggle" onClick={() => setShowRegConfirm(!showRegConfirm)}>
-                {showRegConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-              {regErrors.confirm && <span className="af-error">{regErrors.confirm}</span>}
-            </div>
-
-            <div className={`auth-checkbox-wrap ${regErrors.agree ? 'error' : ''}`}>
-              <label className="auth-checkbox">
-                <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
-                <span className="ac-custom" />
-                <span>我已阅读并同意 <button type="button" className="auth-link" onClick={() => alert('服务条款')}>《服务条款》</button> 和 <button type="button" className="auth-link" onClick={() => alert('隐私政策')}>《隐私政策》</button></span>
-              </label>
-              {regErrors.agree && <span className="af-error">{regErrors.agree}</span>}
-            </div>
-
-            <button type="submit" className={`auth-submit ${loading ? 'loading' : ''}`} disabled={loading}>
-              {loading ? <Loader2 size={20} className="spin" /> : '注  册'}
-            </button>
-
-            <p className="auth-switch">
-              已有账号？
-              <button type="button" className="auth-link" onClick={() => setMode('login')}>立即登录 →</button>
-            </p>
-          </form>
+              {showSwitchToLogin && (
+                <p className="auth-switch">
+                  已有账号？
+                  <button type="button" className="auth-link" onClick={() => switchMode('login')}>立即登录 →</button>
+                </p>
+              )}
+            </form>
+          )}
         </div>
 
-        {/* Trust badge */}
         <div className="auth-trust">
           <ShieldCheck size={14} /> 已通过公安部信息安全等级保护三级认证
         </div>
       </div>
 
-      {/* Toast */}
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* ── Styles ── */}
       <style>{`
         .auth-page {
           min-height: 100vh; display: flex; align-items: center; justify-content: center;
           background: linear-gradient(135deg, #F8F9FB 0%, #FFF5F0 50%, #F0F8F6 100%);
           position: relative; padding: 24px 16px;
         }
-
         .auth-mobile-back {
           position: fixed; top: 16px; left: 16px; z-index: 10;
           width: 40px; height: 40px; border-radius: var(--radius-full);
@@ -417,42 +455,41 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
           background: rgba(255,255,255,0.9); color: var(--color-text-secondary);
           box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
-
         .auth-container { position: relative; z-index: 1; width: 100%; max-width: 420px; }
-
         .auth-card {
-          background: rgba(255,255,255,0.97);
-          backdrop-filter: blur(20px);
+          background: rgba(255,255,255,0.97); backdrop-filter: blur(20px);
           border-radius: 20px; padding: 40px 32px 32px;
           box-shadow: 0 8px 40px rgba(0,0,0,0.06);
           border: 1px solid rgba(255,255,255,0.8);
         }
-
-        .auth-logo {
-          display: flex; align-items: center; justify-content: center; gap: 10px;
-          margin-bottom: 24px;
-        }
+        .auth-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 24px; }
         .auth-logo-icon {
           width: 38px; height: 38px;
-          background: var(--color-primary-gradient);
+          background: linear-gradient(135deg, #FF7D5A, #FF9F7A);
           border-radius: var(--radius-sm);
           display: flex; align-items: center; justify-content: center; color: #fff;
         }
-        .auth-logo-text {
-          font-size: 20px; font-weight: 800; color: var(--color-text);
-          letter-spacing: -0.3px;
+        .auth-logo-text { font-size: 20px; font-weight: 800; color: var(--color-text); letter-spacing: -0.3px; }
+        .auth-title-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
+        .auth-title { text-align: center; font-size: 24px; font-weight: 700; color: var(--color-text); margin-bottom: 6px; }
+        .auth-subtitle { text-align: center; font-size: 14px; color: var(--color-text-muted); margin-bottom: 4px; }
+        .auth-role-back {
+          width: 36px; height: 36px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: var(--auth-card-bg, #fff);
+          color: var(--color-text-secondary);
+          cursor: pointer; transition: all 0.2s ease;
         }
-
-        .auth-title {
-          text-align: center; font-size: 24px; font-weight: 700;
-          color: var(--color-text); margin-bottom: 6px;
+        .auth-role-back:hover { background: #f5f5f5; }
+        .auth-role-badge { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 20px; }
+        .auth-role-badge span {
+          padding: 3px 14px; border-radius: 100px; font-size: 12px; font-weight: 600;
+          background: rgba(255,125,90,0.12); color: var(--color-primary);
         }
-        .auth-subtitle {
-          text-align: center; font-size: 14px; color: var(--color-text-muted);
-          margin-bottom: 24px;
-        }
-
-        /* Tabs */
+        .auth-role-change { font-size: 12px; font-weight: 600; color: var(--color-text-muted); text-decoration: underline; text-underline-offset: 2px; }
+        .auth-role-change:hover { color: var(--color-primary); }
         .auth-tabs {
           display: flex; background: var(--color-bg);
           border-radius: var(--radius-sm); padding: 4px;
@@ -463,18 +500,11 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
           font-size: 14px; font-weight: 600; color: var(--color-text-muted);
           border-radius: 6px; transition: all 0.3s ease; position: relative; z-index: 1;
         }
-        .auth-tab.active {
-          background: #fff; color: var(--color-primary);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
+        .auth-tab.active { background: #fff; color: var(--color-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
         .auth-tab:not(.active):hover { color: var(--color-text-secondary); }
-
-        /* Forms */
         .auth-form { transition: all 0.35s ease; }
         .auth-form.hidden { display: none; }
         .auth-form.visible { display: block; animation: fadeIn 0.35s ease; }
-
-        /* Fields */
         .auth-field {
           position: relative; margin-bottom: 18px;
           display: flex; align-items: center; flex-wrap: wrap;
@@ -483,159 +513,69 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
           background: var(--color-bg);
           transition: border-color 0.25s ease, box-shadow 0.25s ease;
         }
-        .auth-field:focus-within {
-          border-color: var(--color-primary);
-          box-shadow: 0 0 0 3px rgba(255,125,90,0.08);
-        }
-        .auth-field.error {
-          border-color: var(--color-error);
-          box-shadow: 0 0 0 3px rgba(255,107,107,0.08);
-          animation: shakeX 0.4s ease;
-        }
-
-        .af-icon {
-          width: 44px; height: 44px; display: flex;
-          align-items: center; justify-content: center;
-          color: var(--color-text-muted); flex-shrink: 0;
-          transition: color 0.25s;
-        }
+        .auth-field:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(255,125,90,0.08); }
+        .auth-field.error { border-color: var(--color-error); box-shadow: 0 0 0 3px rgba(255,107,107,0.08); animation: shakeX 0.4s ease; }
+        .af-icon { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); flex-shrink: 0; transition: color 0.25s; }
         .auth-field:focus-within .af-icon { color: var(--color-primary); }
         .auth-field.error .af-icon { color: var(--color-error); }
-
-        .auth-field input {
-          flex: 1; height: 44px; border: none; background: transparent;
-          font-size: 14px; color: var(--color-text);
-          outline: none; padding-right: 8px;
-          font-family: var(--font);
-        }
+        .auth-field input { flex: 1; height: 44px; border: none; background: transparent; font-size: 14px; color: var(--color-text); outline: none; padding-right: 8px; font-family: var(--font); }
         .auth-field input::placeholder { color: var(--color-text-muted); }
-
-        .af-toggle {
-          width: 36px; height: 44px; display: flex;
-          align-items: center; justify-content: center;
-          color: var(--color-text-muted); flex-shrink: 0;
-          transition: color 0.25s;
-        }
+        .af-toggle { width: 36px; height: 44px; display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); flex-shrink: 0; transition: color 0.25s; }
         .af-toggle:hover { color: var(--color-text-secondary); }
-
-        .af-code-btn {
-          height: 36px; padding: 0 14px; margin-right: 4px;
-          border-radius: 6px; font-size: 13px; font-weight: 600;
-          color: var(--color-primary); white-space: nowrap;
-          transition: all 0.25s; flex-shrink: 0;
-        }
+        .af-code-btn { height: 36px; padding: 0 14px; margin-right: 4px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--color-primary); white-space: nowrap; transition: all 0.25s; flex-shrink: 0; }
         .af-code-btn:hover:not(:disabled) { background: var(--color-primary-light); }
         .af-code-btn:disabled { color: var(--color-text-muted); cursor: not-allowed; }
-
-        .af-error {
-          width: 100%; padding: 6px 44px 6px;
-          font-size: 12px; color: var(--color-error);
-          line-height: 1.3;
-        }
-
-        /* Row */
-        .auth-row {
-          display: flex; justify-content: space-between; align-items: center;
-          margin-bottom: 24px;
-        }
-
-        .auth-checkbox {
-          display: inline-flex; align-items: center; gap: 8px;
-          cursor: pointer; font-size: 13px; color: var(--color-text-secondary);
-        }
+        .af-error { width: 100%; padding: 6px 44px 6px; font-size: 12px; color: var(--color-error); line-height: 1.3; }
+        .auth-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .auth-checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--color-text-secondary); }
         .auth-checkbox input { display: none; }
-        .ac-custom {
-          width: 18px; height: 18px; border-radius: 4px;
-          border: 2px solid var(--color-border);
-          display: flex; align-items: center; justify-content: center;
-          transition: all 0.25s; flex-shrink: 0;
-        }
-        .auth-checkbox input:checked + .ac-custom {
-          background: var(--color-primary); border-color: var(--color-primary);
-        }
-        .auth-checkbox input:checked + .ac-custom::after {
-          content: ''; width: 5px; height: 9px;
-          border: solid #fff; border-width: 0 2px 2px 0;
-          transform: rotate(45deg); margin-top: -1px;
-        }
+        .ac-custom { width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--color-border); display: flex; align-items: center; justify-content: center; transition: all 0.25s; flex-shrink: 0; }
+        .auth-checkbox input:checked + .ac-custom { background: var(--color-primary); border-color: var(--color-primary); }
+        .auth-checkbox input:checked + .ac-custom::after { content: ''; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); margin-top: -1px; }
         .auth-checkbox-wrap.error .ac-custom { border-color: var(--color-error); }
         .auth-checkbox-wrap.error { margin-bottom: 18px; }
         .auth-checkbox-wrap .af-error { padding: 4px 0 0 0; }
-
-        .auth-link {
-          font-size: 13px; font-weight: 600; color: var(--color-primary);
-          transition: opacity 0.25s;
-        }
+        .auth-link { font-size: 13px; font-weight: 600; color: var(--color-primary); transition: opacity 0.25s; }
         .auth-link:hover { opacity: 0.8; }
-
         .auth-checkbox .auth-link { font-size: 13px; display: inline; }
-
-        /* Submit */
         .auth-submit {
           width: 100%; height: 48px; border-radius: var(--radius-sm);
-          background: var(--color-primary-gradient); color: #fff;
+          background: linear-gradient(135deg, #FF7D5A, #FF9F7A); color: #fff;
           font-size: 16px; font-weight: 700; letter-spacing: 2px;
           box-shadow: 0 4px 15px rgba(255,125,90,0.3);
           transition: all 0.3s ease; display: flex;
           align-items: center; justify-content: center;
           margin-bottom: 24px;
         }
-        .auth-submit:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(255,125,90,0.4);
-        }
+        .auth-submit:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255,125,90,0.4); }
         .auth-submit:active:not(:disabled) { transform: translateY(0); }
         .auth-submit:disabled { opacity: 0.6; cursor: not-allowed; }
         .auth-submit.loading { pointer-events: none; }
         .spin { animation: spin 0.8s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes shakeX {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-4px); }
-          40% { transform: translateX(4px); }
-          60% { transform: translateX(-3px); }
-          80% { transform: translateX(3px); }
-        }
-
-        /* Social */
+        @keyframes shakeX { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
         .auth-social { margin-bottom: 24px; }
-        .as-divider {
-          text-align: center; font-size: 12px; color: var(--color-text-muted);
-          position: relative; margin-bottom: 16px;
-        }
-        .as-divider::before, .as-divider::after {
-          content: ''; position: absolute; top: 50%;
-          width: 28%; height: 1px; background: var(--color-border);
-        }
+        .as-divider { text-align: center; font-size: 12px; color: var(--color-text-muted); position: relative; margin-bottom: 16px; }
+        .as-divider::before, .as-divider::after { content: ''; position: absolute; top: 50%; width: 28%; height: 1px; background: var(--color-border); }
         .as-divider::before { left: 0; }
         .as-divider::after { right: 0; }
         .as-divider span { background: var(--auth-card-bg, #fff); padding: 0 12px; }
-
         .as-btns { display: flex; gap: 10px; }
-        .as-btn {
-          flex: 1; display: flex; align-items: center; justify-content: center;
-          gap: 6px; padding: 10px; border-radius: var(--radius-sm);
-          border: 1px solid var(--color-border); font-size: 13px; font-weight: 500;
-          color: var(--color-text-secondary); transition: all 0.25s ease;
-        }
+        .as-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); font-size: 13px; font-weight: 500; color: var(--color-text-secondary); transition: all 0.25s ease; }
         .as-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
         .as-btn.wechat:hover { background: #07C160; color: #fff; border-color: #07C160; }
         .as-btn.alipay:hover { background: #1677FF; color: #fff; border-color: #1677FF; }
         .as-btn.sms:hover { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
-
-        /* Switch */
-        .auth-switch {
-          text-align: center; font-size: 14px; color: var(--color-text-secondary);
-        }
+        .auth-switch { text-align: center; font-size: 14px; color: var(--color-text-secondary); }
         .auth-switch .auth-link { font-size: 14px; }
-
-        /* Trust */
-        .auth-trust {
+        .auth-account-hint {
           display: flex; align-items: center; justify-content: center; gap: 6px;
-          margin-top: 20px; font-size: 12px; color: var(--color-text-muted);
+          padding: 10px; border-radius: var(--radius-sm);
+          background: #E8F8F4; color: #3A9E89; font-size: 13px;
+          margin-bottom: 16px;
         }
-
-        /* Responsive */
+        .auth-trust { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 20px; font-size: 12px; color: var(--color-text-muted); }
+        @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-16px) rotate(8deg); } }
         @media (max-width: 480px) {
           .auth-card { padding: 28px 20px 24px; border-radius: 16px; }
           .auth-title { font-size: 22px; }
@@ -643,7 +583,6 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
           .as-btn { min-width: calc(33.33% - 7px); }
           .auth-mobile-back { display: flex; }
         }
-
         @media (max-width: 360px) {
           .auth-card { padding: 24px 16px 20px; }
           .as-btn { font-size: 12px; padding: 8px 6px; gap: 4px; }

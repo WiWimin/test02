@@ -5,6 +5,7 @@ import {
   Clock, Calendar, Image as ImageIcon, Phone, MessageCircle
 } from 'lucide-react'
 import { isLoggedIn } from '../utils/auth'
+import RegisterPrompt from './RegisterPrompt'
 
 /* ── Mock Data ── */
 
@@ -320,6 +321,13 @@ export default function ServiceDetail() {
         {/* Spacer for fixed bottom bar */}
         <div className="sd-bottom-spacer" />
       </div>
+
+      {/* Register prompt for non-logged-in users */}
+      {!isLoggedIn() && (
+        <div className="container" style={{ padding: '0 24px', marginBottom: 8 }}>
+          <RegisterPrompt variant="inline" />
+        </div>
+      )}
 
       {/* ── Fixed Bottom Bar ── */}
       <div className="sd-bottom-bar">

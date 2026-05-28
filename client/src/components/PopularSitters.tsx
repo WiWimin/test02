@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Star, MapPin, ShieldCheck } from 'lucide-react'
+import RegisterPrompt from './RegisterPrompt'
 
 const sitters = [
   {
@@ -116,6 +117,11 @@ export default function PopularSitters() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Register prompt */}
+      <div className="container" style={{ marginTop: -8 }}>
+        <RegisterPrompt variant="card" />
       </div>
 
       <style>{`
