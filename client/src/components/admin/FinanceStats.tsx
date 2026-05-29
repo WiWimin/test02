@@ -10,7 +10,7 @@ export default function FinanceStats() {
   const [chartTab, setChartTab] = useState<'revenue' | 'commission' | 'orders'>('revenue')
   const [monthlyData, setMonthlyData] = useState<any[]>([])
   const [recentTransactions, setRecentTransactions] = useState<any[]>([])
-  useEffect(() => { api.get<any>('/admin/finance').then(data => { setMonthlyData(data.monthlyData || []); setRecentTransactions(data.recentTransactions || []) }) }, [])
+  useEffect(() => { api.get<any>('/admin/finance').then(data => { setMonthlyData(data.monthlyData || []); setRecentTransactions(data.recentTransactions || []) }).catch(() => {}) }, [])
   const chartMax = Math.max(...monthlyData.map(d => d.revenue), 1)
 
   const totalRevenue = monthlyData.reduce((s, d) => s + d.revenue, 0)
@@ -100,9 +100,9 @@ export default function FinanceStats() {
                 <td><span className="fs-td-code">{tx.id}</span></td>
                 <td><span className="fs-td-order">{tx.order}</span></td>
                 <td>{tx.sitter}</td>
-                <td><span className="fs-td-amount">¥{tx.amount}</span></td>
-                <td><span className="fs-td-commission">¥{tx.commission.toFixed(2)}</span></td>
-                <td><span className="fs-td-payout">¥{tx.payout.toFixed(2)}</span></td>
+                <td><span className="fs-td-amount">¥{tx.amount ?? 0}</span></td>
+                <td><span className="fs-td-commission">¥{(tx.commission ?? 0).toFixed(2)}</span></td>
+                <td><span className="fs-td-payout">¥{(tx.payout ?? 0).toFixed(2)}</span></td>
                 <td><span className="fs-pay-method">{tx.method}</span></td>
                 <td><span className={`fs-status-tag ${tx.status}`}>{tx.status === 'settled' ? '已结算' : '待结算'}</span></td>
                 <td className="fs-td-muted">{tx.date}</td>

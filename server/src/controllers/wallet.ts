@@ -19,6 +19,29 @@ export async function getWalletStats(req: AuthRequest, res: Response, next: Next
 
     const profile = await prisma.sitterProfile.findUnique({ where: { user_id: req.user!.id } })
 
+    const transactions = await prisma.transaction.findMany({
+      where: { sitter_id: req.user!.id, type: 'income' },
+      orderBy: { created_at: 'desc' },
+      take: 20,
+    })
+
+    const weeklyData = await prisma.transaction.findMany({
+      where: { sitter_id: req.user!.id, type: 'income', settled: true, created_at: { gte: weekStart } },
+      orderBy: { created_at: 'asc' },
+    })
+
+    const trend = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart)
+      d.setDate(d.getDate() + i)
+      const key = `${d.getMonth() + 1}/${d.getDate()}`
+      const val = weeklyData.filter(t => {
+        const td = new Date(t.created_at)
+        return td.getDate() === d.getDate() && td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear()
+      }).reduce((sum, t) => sum + (t.payout || 0), 0)
+      trend.push({ day: key, amount: val })
+    }
+
     success(res, {
       todayIncome: todayTx._sum.payout || 0,
       weekIncome: weekTx._sum.payout || 0,
@@ -28,6 +51,12 @@ export async function getWalletStats(req: AuthRequest, res: Response, next: Next
       weekOrders: 0,
       monthOrders: 0,
       totalOrders: profile?.total_orders || 0,
+      transactions: transactions.map(t => ({
+        id: t.id, amount: t.amount, type: t.type,
+        description: t.type === 'income' ? '服务收入' : '提现',
+        createdAt: t.created_at,
+      })),
+      weeklyData: trend,
     })
   } catch (err) { next(err) }
 }

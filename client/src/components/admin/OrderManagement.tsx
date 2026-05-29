@@ -3,16 +3,20 @@ import { Search, Eye, AlertCircle, X, RefreshCw, CheckCircle, XCircle, Clock, Fi
 import { api } from '../../utils/api'
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: any }> = {
-  completed: { label: '已完成', color: '#2D9B7A', bg: 'linear-gradient(135deg, #E8F8F4, #D4F5EC)', icon: CheckCircle },
-  in_progress: { label: '服务中', color: '#3B82F6', bg: 'linear-gradient(135deg, #EFF6FF, #E0EEFF)', icon: Clock },
-  pending: { label: '待接单', color: '#D48806', bg: 'linear-gradient(135deg, #FFFBEB, #FFF3CC)', icon: Clock },
-  refunding: { label: '退款中', color: '#D63031', bg: 'linear-gradient(135deg, #FFF0F0, #FFE0E0)', icon: RefreshCw },
-  disputed: { label: '纠纷', color: '#7C3AED', bg: 'linear-gradient(135deg, #F0EBFF, #E4DBFF)', icon: AlertCircle },
-  cancelled: { label: '已取消', color: '#8E8EA0', bg: 'linear-gradient(135deg, #F5F5F7, #EEEFF2)', icon: XCircle },
+  pending_pay: { label: '待付款', color: '#D48806', bg: '#FFFBEB', icon: Clock },
+  pending_accept: { label: '待接单', color: '#3B82F6', bg: '#EFF6FF', icon: Clock },
+  accepted: { label: '已接单', color: '#45B7A0', bg: '#E8F8F4', icon: CheckCircle },
+  in_progress: { label: '服务中', color: '#3B82F6', bg: '#EFF6FF', icon: Clock },
+  completed: { label: '已完成', color: '#2D9B7A', bg: '#E8F8F4', icon: CheckCircle },
+  reviewed: { label: '已评价', color: '#9E9EB8', bg: '#F5F5F7', icon: CheckCircle },
+  refunding: { label: '退款中', color: '#D63031', bg: '#FFF0F0', icon: RefreshCw },
+  disputed: { label: '纠纷', color: '#7C3AED', bg: '#F0EBFF', icon: AlertCircle },
+  cancelled: { label: '已取消', color: '#8E8EA0', bg: '#F5F5F7', icon: XCircle },
 }
+const statusFallback = { label: '未知', color: '#9E9EB8', bg: '#F5F5F7', icon: Clock }
 
 function OrderDetailModal({ order, onClose }: { order: any; onClose: () => void }) {
-  const st = statusMap[order.status]
+  const st = statusMap[order.status] || statusFallback
   const Icon = st.icon
   return (
     <div className="om-modal-overlay" onClick={onClose}>
@@ -63,7 +67,7 @@ function OrderDetailModal({ order, onClose }: { order: any; onClose: () => void 
 
 export default function OrderManagement() {
   const [orders, setOrders] = useState<any[]>([])
-  useEffect(() => { api.get<any[]>('/admin/orders').then(setOrders) }, [])
+  useEffect(() => { api.get<any>('/admin/orders').then(d => setOrders(Array.isArray(d) ? d : d?.items || [])).catch(() => setOrders([])) }, [])
   const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState('all')
   const [selected, setSelected] = useState<any | null>(null)
@@ -106,7 +110,7 @@ export default function OrderManagement() {
 
       <div className="om-toolbar">
         <div className="om-search"><Search size={16} /><input placeholder="搜索订单号、用户名或服务者..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} /></div>
-        <button className="om-refresh-btn" onClick={() => api.get<any[]>('/admin/orders').then(setOrders)}><RefreshCw size={15} /> 刷新</button>
+        <button className="om-refresh-btn" onClick={() => api.get<any>('/admin/orders').then(d => setOrders(Array.isArray(d) ? d : d?.items || []))}><RefreshCw size={15} /> 刷新</button>
       </div>
 
       <div className="om-table-card">
@@ -116,7 +120,7 @@ export default function OrderManagement() {
             {paged.length === 0 ? (
               <tr><td colSpan={8}><div className="om-empty"><Search size={32} /><p>未找到匹配的订单</p></div></td></tr>
             ) : paged.map(o => {
-              const st = statusMap[o.status]
+              const st = statusMap[o.status] || statusFallback
               const Icon = st.icon
               const isIssue = o.status === 'refunding' || o.status === 'disputed'
               return (

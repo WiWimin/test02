@@ -4,7 +4,21 @@ import { api } from '../../utils/api'
 
 export default function SystemSettings() {
   const [settings, setSettings] = useState<any>({})
-  useEffect(() => { api.get<any>('/admin/settings').then(setSettings) }, [])
+  useEffect(() => {
+    api.get<any>('/admin/settings').then(data => {
+      setSettings({
+        commissionRate: data.commission_rate,
+        cancelFreeHours: data.cancel_free_hours,
+        acceptTimeout: data.accept_timeout,
+        maxDistance: data.max_distance,
+        minPayout: data.min_payout,
+        serviceStartRadius: data.service_radius,
+        autoConfirm: data.auto_confirm,
+        smsNotify: data.sms_notify,
+        newSitterOpen: data.new_sitter_open ?? true,
+      })
+    }).catch(() => {})
+  }, [])
 
   const [admins] = useState([
     { id: 'A-001', name: '超级管理员', account: 'admin@petcare.com', role: '超级管理员', lastLogin: '2026-05-28 09:30', avatar: '👤' },

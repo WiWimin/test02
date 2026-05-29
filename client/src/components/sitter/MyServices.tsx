@@ -1,167 +1,50 @@
-import { useState, useEffect } from 'react'
-import { Plus, Edit3, Power, Eye, X, Check } from 'lucide-react'
+﻿import { useState, useEffect } from 'react'
+import { Plus, Edit3, Power, X } from 'lucide-react'
 import { api } from '../../utils/api'
-
-interface ServiceItem {
-  id: string; icon: string; name: string; price: number; duration: number;
-  description: string; status: 'active' | 'inactive'; completedOrders: number;
-}
-
-const defaultWorkHours = [
-  { day: '周一~周五', range: '09:00 - 20:00' },
-  { day: '周六~周日', range: '10:00 - 18:00' },
-]
 
 export default function MyServices() {
   const [services, setServices] = useState<any[]>([])
+  const [showModal, setShowModal] = useState(false)
+  const [editItem, setEditItem] = useState<any>(null)
+  const [form, setForm] = useState({ name: '', price: 0, duration: 30, description: '', category: 'walk' })
 
-  useEffect(() => {
-    api.get('/services').then((data: any) => setServices(data || []))
-  }, [])
-  const [showEdit, setShowEdit] = useState(false)
-  const [editing, setEditing] = useState<ServiceItem | null>(null)
+  useEffect(() => { api.get<any[]>('/services').then(setServices).catch(() => {}) }, [])
 
-  const toggleStatus = (id: string) => {
-    const svc = services.find(s => s.id === id)
-    if (!svc) return
-    const newStatus = svc.status === 'active' ? 'inactive' : 'active'
-    api.put('/services/' + id, { status: newStatus }).then(() => {
-      setServices(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s))
-    })
+  const handleSubmit = async () => {
+    try {
+      if (editItem) { await api.put('/services/' + editItem.id, form); setServices(prev => prev.map(s => s.id === editItem.id ? { ...s, ...form } : s)) }
+      else { const r = await api.post<any>('/services', form); setServices(prev => [...prev, r]) }
+      setShowModal(false); setEditItem(null)
+    } catch {}
   }
 
-  const openNew = () => { setEditing(null); setShowEdit(true) }
-  const openEdit = (svc: ServiceItem) => { setEditing(svc); setShowEdit(true) }
+  const toggleService = async (id: string) => {
+    try { await api.put('/services/' + id + '/toggle'); setServices(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' } : s)) } catch {}
+  }
 
   return (
-    <div className="ms-page">
-      <div className="ms-header">
-        <h1>我的服务</h1>
-        <button className="ms-add-btn" onClick={openNew}><Plus size={16} /> 新增服务</button>
-      </div>
-
-      <div className="ms-card">
-        <div className="ms-card-hdr"><h3>出勤设置</h3></div>
-        <div className="ms-card-body">
-          {defaultWorkHours.map(w => (
-            <div key={w.day} className="ms-hour-row">
-              <span className="ms-hour-day">{w.day}</span>
-              <span className="ms-hour-range">{w.range}</span>
-            </div>
-          ))}
-          <div className="ms-hour-row">
-            <span className="ms-hour-day">服务区域</span>
-            <span className="ms-hour-range">望京 · 三元桥 · 亮马桥</span>
-          </div>
-          <button className="ms-edit-link" onClick={() => alert('编辑出勤设置')}>✏️ 编辑</button>
-        </div>
-      </div>
-
-      <div className="ms-list">
-        {services.map(svc => (
-          <div key={svc.id} className={`ms-service-card ${svc.status === 'inactive' ? 'inactive' : ''}`}>
-            <div className="ms-svc-left">
-              <span className="ms-svc-icon">{svc.icon}</span>
-            </div>
-            <div className="ms-svc-body">
-              <div className="ms-svc-top">
-                <span className="ms-svc-name">{svc.name}</span>
-                <span className={`ms-svc-status ${svc.status}`}>
-                  {svc.status === 'active' ? '🟢 已上架' : '🔴 已下架'}
-                </span>
-              </div>
-              <p className="ms-svc-desc">{svc.description}</p>
-              <div className="ms-svc-footer">
-                <span className="ms-svc-price">¥{svc.price}<span className="ms-svc-unit">/{svc.duration}分钟</span></span>
-                <span className="ms-svc-orders"><Eye size={12} /> {svc.completedOrders}单</span>
-              </div>
-            </div>
-            <div className="ms-svc-actions">
-              <button className="ms-svc-btn" onClick={() => openEdit(svc)} title="编辑"><Edit3 size={15} /></button>
-              <button className={`ms-svc-btn ${svc.status === 'active' ? 'warn' : 'ok'}`} onClick={() => toggleStatus(svc.id)} title={svc.status === 'active' ? '下架' : '上架'}>
-                {svc.status === 'active' ? <X size={15} /> : <Check size={15} />}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {showEdit && (
-        <div className="ms-modal-overlay" onClick={() => setShowEdit(false)}>
-          <div className="ms-modal" onClick={e => e.stopPropagation()}>
-            <h2>{editing ? '编辑服务' : '新增服务'}</h2>
-            <div className="ms-form">
-              <label>服务名称</label>
-              <input defaultValue={editing?.name || ''} placeholder="如：遛狗 30分钟" />
-              <label>服务价格 (¥)</label>
-              <input defaultValue={editing?.price || ''} type="number" placeholder="49" />
-              <label>时长 (分钟)</label>
-              <input defaultValue={editing?.duration || ''} type="number" placeholder="30" />
-              <label>服务描述</label>
-              <textarea defaultValue={editing?.description || ''} placeholder="简要描述服务内容" rows={3} />
-              <div className="ms-form-actions">
-                <button className="ms-form-btn cancel" onClick={() => setShowEdit(false)}>取消</button>
-                <button className="ms-form-btn save" onClick={() => {
-                  const el = document.querySelectorAll('.ms-form input, .ms-form textarea') as NodeListOf<HTMLInputElement | HTMLTextAreaElement>
-                  const body = { name: el[0].value, price: Number(el[1].value), duration: Number(el[2].value), description: el[3].value }
-                  const req = editing ? api.put('/services/' + editing.id, body) : api.post('/services', body)
-                  req.then(() => { setShowEdit(false); api.get('/services').then((d: any) => setServices(d || [])) })
-                }}>保存</button>
-              </div>
-            </div>
+    <div className="sms-page">
+      <div className="sms-header"><h2>我的服务</h2><button className="sms-add-btn" onClick={() => { setEditItem(null); setForm({ name: '', price: 0, duration: 30, description: '', category: 'walk' }); setShowModal(true) }}><Plus size={16} /> 添加服务</button></div>
+      {services.length === 0 ? <div className="sms-empty">暂无服务，点击上方添加</div> : services.map(s => (
+        <div key={s.id} className="sms-card">
+          <div className="sms-card-top"><span className="sms-name">{s.icon || '🐾'} {s.name}</span><span className={'sms-status ' + s.status}>{s.status === 'active' ? '上架' : '下架'}</span></div>
+          <div className="sms-card-meta">¥{s.price} / {s.duration}分钟</div>
+          {s.description && <div className="sms-desc">{s.description}</div>}
+          <div className="sms-card-actions">
+            <button className="sms-action-btn" onClick={() => { setEditItem(s); setForm({ name: s.name, price: s.price, duration: s.duration, description: s.description || '', category: s.category || 'walk' }); setShowModal(true) }}><Edit3 size={13} /> 编辑</button>
+            <button className={'sms-action-btn ' + (s.status === 'active' ? 'off' : 'on')} onClick={() => toggleService(s.id)}><Power size={13} /> {s.status === 'active' ? '下架' : '上架'}</button>
           </div>
         </div>
-      )}
+      ))}
 
-      <style>{`
-        .ms-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .ms-header h1 { font-size: 20px; font-weight: 800; color: var(--color-text); margin: 0; }
-        .ms-add-btn { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: var(--radius-sm); background: var(--color-primary-gradient); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.25s; }
-        .ms-add-btn:hover { box-shadow: 0 4px 14px rgba(255,125,90,0.3); transform: translateY(-1px); }
-        .ms-card { background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 16px; margin-bottom: 16px; }
-        .ms-card-hdr { margin-bottom: 12px; }
-        .ms-card-hdr h3 { font-size: 15px; font-weight: 700; color: var(--color-text); margin: 0; }
-        .ms-card-body { display: flex; flex-direction: column; gap: 8px; }
-        .ms-hour-row { display: flex; align-items: center; gap: 12px; }
-        .ms-hour-day { font-size: 13px; font-weight: 600; color: var(--color-text); min-width: 80px; }
-        .ms-hour-range { font-size: 13px; color: var(--color-text-secondary); }
-        .ms-edit-link { font-size: 12px; color: var(--color-primary); font-weight: 600; align-self: flex-start; cursor: pointer; }
-        .ms-list { display: flex; flex-direction: column; gap: 10px; }
-        .ms-service-card { display: flex; gap: 14px; background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 16px; transition: all 0.25s; }
-        .ms-service-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.03); }
-        .ms-service-card.inactive { opacity: 0.65; }
-        .ms-svc-left { flex-shrink: 0; }
-        .ms-svc-icon { font-size: 32px; }
-        .ms-svc-body { flex: 1; min-width: 0; }
-        .ms-svc-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-        .ms-svc-name { font-size: 15px; font-weight: 700; color: var(--color-text); }
-        .ms-svc-status { font-size: 11px; font-weight: 600; }
-        .ms-svc-status.active { color: #2D9B7A; }
-        .ms-svc-status.inactive { color: var(--color-text-muted); }
-        .ms-svc-desc { font-size: 13px; color: var(--color-text-secondary); margin: 4px 0; line-height: 1.4; }
-        .ms-svc-footer { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
-        .ms-svc-price { font-size: 18px; font-weight: 800; color: var(--color-primary); }
-        .ms-svc-unit { font-size: 12px; font-weight: 500; color: var(--color-text-muted); }
-        .ms-svc-orders { display: flex; align-items: center; gap: 3px; font-size: 12px; color: var(--color-text-muted); }
-        .ms-svc-actions { display: flex; flex-direction: column; gap: 4px; justify-content: center; }
-        .ms-svc-btn { width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--color-text-muted); transition: all 0.2s; cursor: pointer; }
-        .ms-svc-btn:hover { background: var(--color-primary-light); color: var(--color-primary); }
-        .ms-svc-btn.warn:hover { background: #FFF0F0; color: var(--color-error); }
-        .ms-svc-btn.ok:hover { background: #E8F8F4; color: #2D9B7A; }
-        .ms-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 20px; }
-        .ms-modal { background: #fff; border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 420px; box-shadow: 0 25px 80px rgba(0,0,0,0.15); animation: expandIn 0.3s ease; }
-        .ms-modal h2 { font-size: 18px; font-weight: 800; color: var(--color-text); margin: 0 0 20px; }
-        .ms-form { display: flex; flex-direction: column; gap: 12px; }
-        .ms-form label { font-size: 13px; font-weight: 600; color: var(--color-text); }
-        .ms-form input, .ms-form textarea { padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); font-size: 13px; outline: none; font-family: inherit; }
-        .ms-form input:focus, .ms-form textarea:focus { border-color: var(--color-primary); }
-        .ms-form textarea { resize: vertical; }
-        .ms-form-actions { display: flex; gap: 10px; margin-top: 8px; }
-        .ms-form-btn { flex: 1; padding: 10px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.25s; }
-        .ms-form-btn.cancel { border: 1px solid var(--color-border); color: var(--color-text-secondary); background: #fff; }
-        .ms-form-btn.save { background: var(--color-primary-gradient); color: #fff; border: none; box-shadow: 0 3px 10px rgba(255,125,90,0.2); }
-        @media (max-width: 768px) { .ms-service-card { flex-wrap: wrap; } .ms-svc-actions { flex-direction: row; width: 100%; justify-content: flex-end; } }
-      `}</style>
+      {showModal && <div className="sms-modal-overlay" onClick={() => setShowModal(false)}><div className="sms-modal" onClick={e => e.stopPropagation()}><div className="sms-modal-header"><h3>{editItem ? '编辑服务' : '添加服务'}</h3><button onClick={() => setShowModal(false)}><X size={18} /></button></div>
+        <div className="sms-modal-field"><label>服务名称</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="如：遛狗30分钟" /></div>
+        <div className="sms-modal-row"><div className="sms-modal-field flex"><label>价格 (¥)</label><input type="number" value={form.price} onChange={e => setForm({ ...form, price: +e.target.value })} /></div><div className="sms-modal-field flex"><label>时长 (分钟)</label><input type="number" value={form.duration} onChange={e => setForm({ ...form, duration: +e.target.value })} /></div></div>
+        <div className="sms-modal-field"><label>描述</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={3} /></div>
+        <button className="sms-submit-btn" onClick={handleSubmit}>保存</button>
+      </div></div>}
+
+      <style>{'.sms-page { display: flex; flex-direction: column; gap: 10px; } .sms-header { display: flex; justify-content: space-between; align-items: center; } .sms-header h2 { font-size: 18px; font-weight: 800; color: #1A1A2E; margin: 0; } .sms-add-btn { display: flex; align-items: center; gap: 4px; padding: 8px 14px; border-radius: 8px; background: #FF7D5A; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; } .sms-empty { text-align: center; padding: 40px; color: #8E8EA0; font-size: 13px; } .sms-card { background: #fff; border-radius: 14px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); } .sms-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; } .sms-name { font-size: 14px; font-weight: 600; color: #1A1A2E; } .sms-status { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; } .sms-status.active { background: #E8F8F4; color: #45B7A0; } .sms-status.inactive { background: #F0F2F5; color: #8E8EA0; } .sms-card-meta { font-size: 15px; font-weight: 800; color: #FF7D5A; margin-bottom: 6px; } .sms-desc { font-size: 12px; color: #8E8EA0; margin-bottom: 8px; } .sms-card-actions { display: flex; gap: 8px; } .sms-action-btn { display: flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 600; background: #F5F6FA; color: #5A5A7A; cursor: pointer; } .sms-action-btn.on { background: #E8F8F4; color: #45B7A0; } .sms-action-btn.off { background: #FFF0F0; color: #FF6B6B; } .sms-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; } .sms-modal { background: #fff; border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; } .sms-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; } .sms-modal-header h3 { font-size: 16px; font-weight: 700; color: #1A1A2E; margin: 0; } .sms-modal-field { margin-bottom: 14px; } .sms-modal-field label { display: block; font-size: 12px; color: #8E8EA0; margin-bottom: 4px; } .sms-modal-field input, .sms-modal-field textarea { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #EEEEF2; font-size: 13px; outline: none; box-sizing: border-box; } .sms-modal-field input:focus, .sms-modal-field textarea:focus { border-color: #FF7D5A; } .sms-modal-row { display: flex; gap: 10px; } .sms-modal-row .flex { flex: 1; } .sms-submit-btn { width: 100%; padding: 12px; border-radius: 8px; background: #FF7D5A; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }'}</style>
     </div>
   )
 }

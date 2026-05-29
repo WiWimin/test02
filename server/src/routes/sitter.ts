@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { listSitters, getSitterDetail, getSitterReviews, toggleFavorite, listFavorites, submitApplication, getApplicationStatus } from '../controllers/sitter'
+import { listSitters, getSitterDetail, getSitterReviews, toggleFavorite, listFavorites, submitApplication, getApplicationStatus, updateProfile } from '../controllers/sitter'
 import { auth } from '../middleware/auth'
 import { requireRole } from '../middleware/role'
 import { validate } from '../middleware/validate'
@@ -10,6 +10,7 @@ const router = Router()
 router.get('/', listSitters)
 router.get('/favorites', auth, requireRole('owner'), listFavorites)
 router.post('/:id/favorite', auth, requireRole('owner'), toggleFavorite)
+router.put('/profile', auth, requireRole('sitter'), updateProfile)
 router.get('/:id', getSitterDetail)
 router.get('/:id/reviews', getSitterReviews)
 router.post('/application', auth, requireRole('sitter'), validate(sitterApplicationSchema), submitApplication)

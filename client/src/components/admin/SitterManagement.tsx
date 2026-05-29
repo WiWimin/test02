@@ -66,7 +66,7 @@ function CertBadge({ cert }: { cert: string }) {
 
 export default function SitterManagement() {
   const [sitters, setSitters] = useState<any[]>([])
-  useEffect(() => { api.get<any[]>('/admin/sitters').then(setSitters) }, [])
+  useEffect(() => { api.get<any>('/admin/sitters').then(d => setSitters(Array.isArray(d) ? d : d?.items || [])).catch(() => setSitters([])) }, [])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState<any | null>(null)

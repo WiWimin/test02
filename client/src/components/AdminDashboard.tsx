@@ -12,6 +12,7 @@ import OrderManagement from './admin/OrderManagement'
 import FinanceStats from './admin/FinanceStats'
 import ContentManagement from './admin/ContentManagement'
 import SystemSettings from './admin/SystemSettings'
+import ErrorBoundary from './ErrorBoundary'
 
 /* ── Static Config ── */
 
@@ -63,38 +64,27 @@ export default function AdminDashboard() {
           api.get<any[]>('/admin/orders?page=1&pageSize=5').catch(() => []),
           api.get<any[]>('/admin/sitters?page=1&pageSize=5').catch(() => []),
         ])
-        setStats(dashboardData)
+        setStats({
+          todayOrders: dashboardData.stats?.todayOrders ?? 0,
+          totalRevenue: dashboardData.stats?.todayRevenue ?? 0,
+          totalUsers: dashboardData.stats?.newUsers ?? 0,
+          totalSitters: dashboardData.stats?.pendingSitters ?? 0,
+          totalOrders: dashboardData.stats?.totalOrders ?? 0,
+        })
 
-        if (dashboardData.revenueTrend && Array.isArray(dashboardData.revenueTrend)) {
-          setChartData(dashboardData.revenueTrend.map((v: number, i: number) => {
-            const d = new Date()
-            d.setDate(d.getDate() - (6 - i))
-            return { day: `${d.getMonth() + 1}/${d.getDate()}`, value: v }
-          }))
-        } else if (dashboardData.ordersByStatus && Array.isArray(dashboardData.ordersByStatus)) {
-          setChartData(dashboardData.ordersByStatus.map((os: any, i: number) => ({
-            day: statusMap[os.status]?.label || os.status,
-            value: os.count,
-          })))
+        if (dashboardData.chartData && Array.isArray(dashboardData.chartData)) {
+          setChartData(dashboardData.chartData)
         }
 
-        const items: any[] = []
-        if (dashboardData.totalSitters > 0) {
-          items.push({ type: 'sitter', label: '服务者入驻待审核', count: dashboardData.totalSitters, severity: 'medium', icon: Briefcase })
-        }
-        if (dashboardData.ordersByStatus) {
-          const pendingOrderCount = dashboardData.ordersByStatus
-            .filter((os: any) => os.status === 'pending_pay' || os.status === 'pending_accept')
-            .reduce((s: number, os: any) => s + os.count, 0)
-          if (pendingOrderCount > 0) {
-            items.push({ type: 'refund', label: '待处理订单', count: pendingOrderCount, severity: 'medium', icon: DollarSign })
-          }
-        }
-        setPendingItems(items.length > 0 ? items : [
-          { type: 'sitter', label: '服务者入驻待审核', count: dashboardData.totalSitters || 0, severity: 'medium', icon: Briefcase },
+        const pendingItemsFromApi = dashboardData.pendingItems && Array.isArray(dashboardData.pendingItems)
+          ? dashboardData.pendingItems
+          : []
+        setPendingItems(pendingItemsFromApi.length > 0 ? pendingItemsFromApi : [
+          { type: 'sitter', label: '服务者入驻待审核', count: dashboardData.stats?.pendingSitters ?? 0, severity: 'medium', icon: Briefcase },
         ])
 
-        setTopSitters((sittersData || []).slice(0, 5).map((s: any, i: number) => ({
+        const sitterList = Array.isArray(sittersData) ? sittersData : (sittersData as any)?.items || []
+        setTopSitters(sitterList.slice(0, 5).map((s: any, i: number) => ({
           rank: i + 1,
           name: s.name || '服务者',
           avatar: s.avatar || '👤',
@@ -103,7 +93,8 @@ export default function AdminDashboard() {
           satisfaction: s.satisfaction || '0%',
         })))
 
-        setRecentOrders((ordersData || []).slice(0, 5).map((o: any) => ({
+        const orderList = Array.isArray(ordersData) ? ordersData : (ordersData as any)?.items || []
+        setRecentOrders(orderList.slice(0, 5).map((o: any) => ({
           id: o.id || '',
           user: o.userName || o.user?.name || '用户',
           sitter: o.sitterName || o.sitter?.name || '服务者',
@@ -204,7 +195,8 @@ export default function AdminDashboard() {
         {/* Content */}
         <div className="ad-content">
           {activeNav === 'dashboard' && (
-            loading ? (
+            <ErrorBoundary>
+            {loading ? (
               <>
                 <div className="ad-page-header">
                   <h1>仪表盘</h1>
@@ -254,14 +246,15 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </>
-            )
+            )}
+            </ErrorBoundary>
           )}
-          {activeNav === 'users' && <UserManagement />}
-          {activeNav === 'sitters' && <SitterManagement />}
-          {activeNav === 'orders' && <OrderManagement />}
-          {activeNav === 'finance' && <FinanceStats />}
-          {activeNav === 'content' && <ContentManagement />}
-          {activeNav === 'settings' && <SystemSettings />}
+          {activeNav === 'users' && <ErrorBoundary><UserManagement /></ErrorBoundary>}
+          {activeNav === 'sitters' && <ErrorBoundary><SitterManagement /></ErrorBoundary>}
+          {activeNav === 'orders' && <ErrorBoundary><OrderManagement /></ErrorBoundary>}
+          {activeNav === 'finance' && <ErrorBoundary><FinanceStats /></ErrorBoundary>}
+          {activeNav === 'content' && <ErrorBoundary><ContentManagement /></ErrorBoundary>}
+          {activeNav === 'settings' && <ErrorBoundary><SystemSettings /></ErrorBoundary>}
         </div>
       </div>
 

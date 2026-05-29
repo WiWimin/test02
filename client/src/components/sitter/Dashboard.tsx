@@ -1,342 +1,258 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Clock, MapPin, Phone, MessageCircle, Calendar, DollarSign,
-  TrendingUp, Users, Check, X, Bell, AlertCircle
-} from 'lucide-react'
+import { TrendingUp, DollarSign, CalendarCheck, Clock, ChevronRight, Star, Briefcase } from 'lucide-react'
 import { api } from '../../utils/api'
 
-function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
+const statusColor: Record<string, string> = {
+  pending_accept: '#FF9F43', accepted: '#4A90D9', in_progress: '#45B7A0',
+  completed: '#8E8EA0', cancelled: '#FF6B6B',
+}
+
+function AnimatedNumber({ value, prefix = '' }: { value: number; prefix?: string }) {
   const [display, setDisplay] = useState(0)
-  const ref = useRef<ReturnType<typeof setInterval>>()
   useEffect(() => {
-    let start = 0; const duration = 800; const step = Math.max(1, Math.floor(value / 30))
-    ref.current = setInterval(() => {
-      start += step; if (start >= value) { setDisplay(value); clearInterval(ref.current) } else setDisplay(start)
-    }, value > 0 ? duration / (value / step) : 0)
-    return () => clearInterval(ref.current)
+    if (value === 0) { setDisplay(0); return }
+    const duration = 1000; const steps = 30; const increment = value / steps
+    let current = 0; const id = setInterval(() => { current += increment; if (current >= value) { setDisplay(value); clearInterval(id) } else setDisplay(current) }, duration / steps)
+    return () => clearInterval(id)
   }, [value])
-  return <>{display.toLocaleString()}{suffix}</>
+  return <>{prefix}{Math.round(display).toLocaleString()}</>
 }
 
-function OrderCountdown({ createdAt }: { createdAt: number }) {
-  const [remaining, setRemaining] = useState(15 * 60)
-  useEffect(() => {
-    const end = createdAt + 15 * 60 * 1000
-    const tick = () => { const r = Math.max(0, Math.floor((end - Date.now()) / 1000)); setRemaining(r) }
-    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
-  }, [createdAt])
-  const m = Math.floor(remaining / 60); const s = remaining % 60
-  if (remaining <= 0) return <span className="sd-countdown expired">已过期</span>
-  return <span className={`sd-countdown ${remaining < 120 ? 'urgent' : ''}`}>🕐 {m.toString().padStart(2, '0')}:{s.toString().padStart(2, '0')}</span>
-}
-
-export default function SitterDashboard() {
+export default function Dashboard() {
   const navigate = useNavigate()
-  const [activeService, setActiveService] = useState<string | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<'todo' | 'notifications'>('todo')
-  const [user, setUser] = useState<any>(null)
-  const [wallet, setWallet] = useState<any>(null)
-  const [todaySched, setTodaySched] = useState<any[]>([])
+  const [stats, setStats] = useState<any>(null)
+  const [todayOrders, setTodayOrders] = useState<any[]>([])
   const [pendingOrders, setPendingOrders] = useState<any[]>([])
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true)
-      try {
-        const [me, walletRes, todayRes, pendingRes] = await Promise.all([
-          api.get<any>('/auth/me'),
-          api.get<any>('/wallet'),
-          api.get<any[]>('/orders/today'),
-          api.get<any[]>('/orders/pending'),
-        ])
-        setUser(me || null)
-        setWallet(walletRes || null)
-        setTodaySched(todayRes || [])
-        setPendingOrders(pendingRes || [])
-        setNotifications(pendingRes || [])
-      } catch (err) {
-        console.error('Dashboard fetch failed:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchAll()
+    api.get<any>('/wallet').then(d => setStats(d || {})).catch(() => setStats({}))
+    api.get<any[]>('/orders/today').then(d => setTodayOrders(Array.isArray(d) ? d : [])).catch(() => setTodayOrders([]))
+    api.get<any>('/orders?status=pending_accept&pageSize=5').then(d => {
+      const arr = Array.isArray(d) ? d : d?.items || []
+      setPendingOrders(arr)
+    }).catch(() => setPendingOrders([]))
   }, [])
 
-  const handleStartService = async (id: string) => {
-    try {
-      await api.put(`/orders/${id}/start`)
-      setActiveService(id)
-      setTimeout(() => setActiveService(null), 2000)
-    } catch (err) { console.error(err) }
-  }
-  const handleAcceptOrder = async (id: string) => {
-    try {
-      await api.put(`/orders/${id}/accept`)
-      setNotifications(prev => prev.filter(n => n.id !== id))
-    } catch (err) { console.error(err) }
-  }
-  const handleRejectOrder = async (id: string) => {
-    try {
-      await api.put(`/orders/${id}/reject`)
-      setNotifications(prev => prev.filter(n => n.id !== id))
-    } catch (err) { console.error(err) }
-  }
-
-  const getScheduleStatus = (status: string) => {
-    switch (status) {
-      case 'completed': return { label: '已完成', color: '#9E9EB8', bg: '#F5F5F7' }
-      case 'in_progress': return { label: '服务中', color: '#45B7A0', bg: '#E8F8F4' }
-      default: return { label: '待服务', color: '#3B82F6', bg: '#EFF6FF' }
-    }
-  }
-
-  if (loading) return <div className="sd-page" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'60vh', color:'var(--color-text-muted)' }}>加载中...</div>
-
-  const stats = [
-    { label: '今日收入', value: wallet?.today_earned || 0, icon: DollarSign, color: '#FF7D5A', orders: 0, change: '-', up: true },
-    { label: '本周收入', value: wallet?.week_earned || 0, icon: TrendingUp, color: '#45B7A0', orders: 0, change: '-', up: true },
-    { label: '本月收入', value: wallet?.month_earned || 0, icon: Calendar, color: '#4A90D9', orders: 0, change: '-', up: true },
-    { label: '总收入', value: wallet?.total_earned || 0, icon: Users, color: '#9B59B6', orders: 0, change: '-', up: true },
-  ]
+  const totalIncome = stats?.totalIncome || 0
+  const todayInc = stats?.todayIncome || 0
+  const weekInc = stats?.weekIncome || 0
+  const monthInc = stats?.monthIncome || 0
+  const totalOrders = stats?.totalOrders || 0
 
   return (
     <div className="sd-page">
-      <section className="sd-income-section">
-        <div className="sd-income-grid">
-          {stats.map((stat, i) => (
-            <div key={stat.label} className="sd-income-card" style={{ '--delay': `${i * 0.08}s` } as React.CSSProperties}>
-              <div className="sd-ic-top">
-                <span className="sd-ic-label">{stat.label}</span>
-                <div className="sd-ic-icon" style={{ background: `${stat.color}15`, color: stat.color }}>
-                  <stat.icon size={18} />
-                </div>
-              </div>
-              <div className="sd-ic-value">
-                <span className="sd-ic-sign">¥</span>
-                <AnimatedNumber value={stat.value} />
-              </div>
-              <div className="sd-ic-footer">
-                <span className="sd-ic-orders">{stat.orders}单</span>
-                <span className={`sd-ic-change ${stat.up ? 'up' : 'down'}`}>{stat.change}</span>
-              </div>
-            </div>
-          ))}
+      {/* Welcome Card */}
+      <div className="sd-welcome">
+        <div className="sd-welcome-text">
+          <h2>今日概览</h2>
+          <p>新的一天，继续为爱宠服务</p>
         </div>
-      </section>
+        <div className="sd-welcome-badge">
+          <CalendarCheck size={16} />
+          {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+        </div>
+      </div>
 
-      <section className="sd-main-section">
-        <div className="sd-main-layout">
-          <div className="sd-schedule">
-            <div className="sd-schedule-header">
-              <h2><Calendar size={18} /> 今日日程</h2>
-              <span className="sd-schedule-date">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
-            </div>
-            <div className="sd-schedule-list">
-              {todaySched.map((item, i) => {
-                const statusInfo = getScheduleStatus(item.status); const isNow = item.status === 'in_progress'
-                return (
-                  <div key={item.id} className={`sd-sched-item ${isNow ? 'active' : ''} ${item.status === 'completed' ? 'done' : ''}`}>
-                    <div className="sd-si-timeline">
-                      <div className={`sd-si-dot ${isNow ? 'pulse' : ''} ${item.status === 'completed' ? 'done' : ''}`} />
-                      {i < todaySched.length - 1 && <div className="sd-si-line" />}
-                    </div>
-                    <div className="sd-si-card">
-                      <div className="sd-si-top">
-                        <span className="sd-si-time"><Clock size={13} /> {item.time} - {item.endTime}</span>
-                        <span className="sd-si-status" style={{ background: statusInfo.bg, color: statusInfo.color }}>
-                          {isNow && <span className="sd-si-pulse-dot" />}{statusInfo.label}
-                        </span>
-                      </div>
-                      <div className="sd-si-body">
-                        <span className="sd-si-emoji">{item.petEmoji}</span>
-                        <div className="sd-si-info">
-                          <span className="sd-si-service">{item.serviceName} · {item.petName}</span>
-                          <span className="sd-si-address"><MapPin size={12} /> {item.address}</span>
-                          <span className="sd-si-owner">主人: {item.ownerName} {item.ownerPhone}</span>
-                        </div>
-                      </div>
-                      <div className="sd-si-actions">
-                        <button className="sd-si-btn icon" onClick={() => alert(`拨打 ${item.ownerPhone}`)}><Phone size={15} /></button>
-                        <button className="sd-si-btn icon" onClick={() => navigate(`/chat/${item.id}`)}><MessageCircle size={15} /></button>
-                        {item.status !== 'completed' && (
-                          <button className={`sd-si-btn primary ${isNow ? 'pulsing' : ''}`} onClick={() => handleStartService(item.id)}>
-                            {isNow ? '📍 服务中' : '开始服务'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="sd-sidebar">
-            <div className="sd-sb-tabs">
-              <button className={`sd-sb-tab ${sidebarTab === 'todo' ? 'active' : ''}`} onClick={() => setSidebarTab('todo')}>
-                今日待办 <span className="sd-sb-tab-badge">{todaySched.filter(s => s.status === 'pending').length}</span>
-              </button>
-              <button className={`sd-sb-tab ${sidebarTab === 'notifications' ? 'active' : ''}`} onClick={() => setSidebarTab('notifications')}>
-                新订单 <span className="sd-sb-tab-badge urgent">{notifications.length}</span>
-              </button>
-            </div>
-            {sidebarTab === 'todo' && (
-              <div className="sd-sb-content">
-                <div className="sd-todo-list">
-                  {todaySched.filter(s => s.status === 'pending').length === 0 ? (
-                    <div className="sd-todo-empty">🎉 今日所有服务已完成</div>
-                  ) : (
-                    todaySched.filter(s => s.status === 'pending').map(item => (
-                      <div key={item.id} className="sd-todo-item">
-                        <div className="sd-todo-time"><Clock size={13} /> {item.time} - {item.endTime}</div>
-                        <div className="sd-todo-body">
-                          <span className="sd-todo-emoji">{item.petEmoji}</span>
-                          <div className="sd-todo-info">
-                            <span className="sd-todo-service">{item.serviceName}</span>
-                            <span className="sd-todo-address"><MapPin size={11} /> {item.address}</span>
-                          </div>
-                        </div>
-                        <button className="sd-todo-btn" onClick={() => handleStartService(item.id)}>开始服务</button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-            {sidebarTab === 'notifications' && (
-              <div className="sd-sb-content">
-                {notifications.length === 0 ? (
-                  <div className="sd-todo-empty">✅ 暂无新订单</div>
-                ) : (
-                  <div className="sd-notif-list">
-                    {notifications.map(order => (
-                      <div key={order.id} className="sd-notif-card">
-                        <div className="sd-notif-header">
-                          <span className="sd-notif-icon">📩</span>
-                          <span className="sd-notif-title">新订单来了！</span>
-                          <OrderCountdown createdAt={order.createdAt} />
-                        </div>
-                        <div className="sd-notif-body">
-                          <span className="sd-notif-emoji">{order.petEmoji}</span>
-                          <div className="sd-notif-info">
-                            <span className="sd-notif-name">{order.ownerName} · {order.petName}</span>
-                            <span className="sd-notif-service">{order.serviceName}</span>
-                            <span className="sd-notif-price">¥{order.price}</span>
-                          </div>
-                        </div>
-                        <div className="sd-notif-actions">
-                          <button className="sd-notif-btn reject" onClick={() => handleRejectOrder(order.id)}><X size={15} /> 拒单</button>
-                          <button className="sd-notif-btn accept" onClick={() => handleAcceptOrder(order.id)}><Check size={15} /> 接单</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+      {/* Stats Grid */}
+      <div className="sd-stats">
+        <div className="sd-stat-card primary">
+          <div className="sd-stat-icon"><DollarSign size={18} /></div>
+          <div className="sd-stat-body">
+            <span className="sd-stat-value"><AnimatedNumber value={todayInc} prefix="¥" /></span>
+            <span className="sd-stat-label">今日收入</span>
           </div>
         </div>
-      </section>
+        <div className="sd-stat-card">
+          <div className="sd-stat-icon week"><TrendingUp size={18} /></div>
+          <div className="sd-stat-body">
+            <span className="sd-stat-value"><AnimatedNumber value={weekInc} prefix="¥" /></span>
+            <span className="sd-stat-label">本周收入</span>
+          </div>
+        </div>
+        <div className="sd-stat-card">
+          <div className="sd-stat-icon month"><DollarSign size={18} /></div>
+          <div className="sd-stat-body">
+            <span className="sd-stat-value"><AnimatedNumber value={monthInc} prefix="¥" /></span>
+            <span className="sd-stat-label">本月收入</span>
+          </div>
+        </div>
+        <div className="sd-stat-card">
+          <div className="sd-stat-icon total"><Star size={18} /></div>
+          <div className="sd-stat-body">
+            <span className="sd-stat-value"><AnimatedNumber value={totalOrders} /></span>
+            <span className="sd-stat-label">累计订单</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Schedule */}
+      <div className="sd-section">
+        <div className="sd-section-header">
+          <h3>今日日程</h3>
+          <button className="sd-section-more" onClick={() => navigate('/sitter/orders')}>查看全部 <ChevronRight size={14} /></button>
+        </div>
+        {todayOrders.length === 0 ? (
+          <div className="sd-empty">今天暂无服务安排</div>
+        ) : (
+          <div className="sd-timeline">
+            {todayOrders.map((order: any) => (
+              <div key={order.id} className="sd-tl-item" onClick={() => navigate(`/sitter/orders/${order.id}`)}>
+                <div className="sd-tl-dot" style={{ background: statusColor[order.status] || '#8E8EA0' }} />
+                <div className="sd-tl-body">
+                  <div className="sd-tl-top">
+                    <span className="sd-tl-service">{order.serviceName || order.service?.name || '宠物服务'}</span>
+                    <span className="sd-tl-status" style={{ color: statusColor[order.status] || '#8E8EA0' }}>{order.status === 'pending_accept' ? '待接单' : order.status === 'accepted' ? '已接单' : order.status === 'in_progress' ? '服务中' : '已完成'}</span>
+                  </div>
+                  <div className="sd-tl-info">
+                    <span>{order.petName || '宠物'} · {order.ownerName || '主人'}</span>
+                    <span>{order.time || order.service_time || ''}</span>
+                  </div>
+                </div>
+                <ChevronRight size={16} className="sd-tl-arrow" />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pending Orders */}
+      {pendingOrders.length > 0 && (
+        <div className="sd-section">
+          <div className="sd-section-header">
+            <h3>待接订单</h3>
+            <span className="sd-section-badge">{pendingOrders.length}</span>
+          </div>
+          <div className="sd-pending-list">
+            {pendingOrders.map((order: any) => (
+              <div key={order.id} className="sd-pending-item">
+                <div className="sd-pi-top">
+                  <span className="sd-pi-service">{order.serviceName || '宠物服务'}</span>
+                  <span className="sd-pi-price">¥{order.total || order.totalPrice || 0}</span>
+                </div>
+                <div className="sd-pi-info">
+                  <Clock size={12} /> {order.createdAt ? new Date(order.createdAt).toLocaleString('zh-CN') : ''}
+                </div>
+                <div className="sd-pi-actions">
+                  <button className="sd-btn sd-btn-primary" onClick={async () => { try { await api.put(`/orders/${order.id}/accept`); setPendingOrders(prev => prev.filter(o => o.id !== order.id)) } catch {} }}>
+                    接单
+                  </button>
+                  <button className="sd-btn sd-btn-outline" onClick={async () => { try { await api.put(`/orders/${order.id}/reject`); setPendingOrders(prev => prev.filter(o => o.id !== order.id)) } catch {} }}>
+                    拒绝
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <div className="sd-section">
+        <div className="sd-section-header"><h3>快捷操作</h3></div>
+        <div className="sd-actions">
+          <button className="sd-action-card" onClick={() => navigate('/sitter/services')}>
+            <div className="sd-action-icon" style={{ background: '#FFF0EB', color: '#FF7D5A' }}><Briefcase size={22} /></div>
+            <span>管理服务</span>
+          </button>
+          <button className="sd-action-card" onClick={() => navigate('/sitter/wallet')}>
+            <div className="sd-action-icon" style={{ background: '#E8F8F4', color: '#45B7A0' }}><DollarSign size={22} /></div>
+            <span>查看收入</span>
+          </button>
+          <button className="sd-action-card" onClick={() => navigate('/sitter/schedule')}>
+            <div className="sd-action-icon" style={{ background: '#EFF6FF', color: '#4A90D9' }}><CalendarCheck size={22} /></div>
+            <span>日程安排</span>
+          </button>
+          <button className="sd-action-card" onClick={() => navigate('/sitter/profile')}>
+            <div className="sd-action-icon" style={{ background: '#FFF8E0', color: '#FFD93D' }}><Star size={22} /></div>
+            <span>我的资料</span>
+          </button>
+        </div>
+      </div>
 
       <style>{`
-        .sd-income-section { margin-bottom: 20px; }
-        .sd-income-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .sd-income-card {
-          background: #fff; border-radius: var(--radius-md);
-          padding: 18px 20px; border: 1px solid var(--color-border);
-          transition: all 0.3s ease;
-          animation: fadeInUp 0.5s ease both;
-          animation-delay: var(--delay, 0s);
+        .sd-page { display: flex; flex-direction: column; gap: 16px; }
+        .sd-welcome {
+          background: linear-gradient(135deg, #FF7D5A, #FF9F7A); border-radius: 16px;
+          padding: 20px; color: #fff; display: flex; justify-content: space-between;
+          align-items: center;
         }
-        .sd-income-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-        .sd-ic-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .sd-ic-label { font-size: 13px; color: var(--color-text-muted); font-weight: 500; }
-        .sd-ic-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
-        .sd-ic-value { font-size: 26px; font-weight: 800; color: var(--color-text); margin-bottom: 4px; }
-        .sd-ic-sign { font-size: 16px; margin-right: 2px; color: var(--color-text-muted); }
-        .sd-ic-footer { display: flex; align-items: center; gap: 8px; }
-        .sd-ic-orders { font-size: 12px; color: var(--color-text-muted); }
-        .sd-ic-change { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; }
-        .sd-ic-change.up { background: #E8F8F4; color: #45B7A0; }
-        .sd-ic-change.down { background: #FFF0F0; color: #FF6B6B; }
-        .sd-main-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
-        .sd-schedule { min-width: 0; }
-        .sd-schedule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .sd-schedule-header h2 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--color-text); }
-        .sd-schedule-date { font-size: 13px; color: var(--color-text-muted); }
-        .sd-schedule-list { display: flex; flex-direction: column; gap: 0; }
-        .sd-sched-item { display: flex; gap: 16px; position: relative; animation: fadeIn 0.4s ease; }
-        .sd-si-timeline { display: flex; flex-direction: column; align-items: center; width: 20px; flex-shrink: 0; padding-top: 6px; }
-        .sd-si-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--color-border); border: 3px solid var(--color-bg); flex-shrink: 0; z-index: 1; }
-        .sd-si-dot.pulse { background: var(--color-secondary); box-shadow: 0 0 0 4px rgba(69,183,160,0.2); animation: pulse 2s ease infinite; }
-        .sd-si-dot.done { background: var(--color-secondary); }
-        .sd-si-line { width: 2px; flex: 1; background: var(--color-border); min-height: 20px; }
-        .sd-si-card { flex: 1; background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 16px 18px; margin-bottom: 12px; transition: all 0.3s ease; }
-        .sd-sched-item.active .sd-si-card { border-color: var(--color-secondary); box-shadow: 0 0 0 1px rgba(69,183,160,0.15); }
-        .sd-sched-item.done .sd-si-card { opacity: 0.7; }
-        .sd-si-card:hover { box-shadow: var(--shadow-sm); }
-        .sd-si-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .sd-si-time { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--color-text); }
-        .sd-si-status { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; }
-        .sd-si-pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.5s ease infinite; }
-        .sd-si-body { display: flex; gap: 12px; align-items: flex-start; }
-        .sd-si-emoji { font-size: 28px; flex-shrink: 0; }
-        .sd-si-info { display: flex; flex-direction: column; gap: 3px; }
-        .sd-si-service { font-size: 14px; font-weight: 600; color: var(--color-text); }
-        .sd-si-address, .sd-si-owner { font-size: 12px; color: var(--color-text-muted); display: flex; align-items: center; gap: 4px; }
-        .sd-si-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border); }
-        .sd-si-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 16px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; transition: all 0.25s; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
-        .sd-si-btn.icon { padding: 7px 10px; }
-        .sd-si-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-light); }
-        .sd-si-btn.primary { background: var(--color-primary-gradient); color: #fff; border-color: transparent; box-shadow: 0 3px 10px rgba(255,125,90,0.25); }
-        .sd-si-btn.primary:hover { box-shadow: 0 6px 20px rgba(255,125,90,0.35); transform: translateY(-1px); }
-        .sd-si-btn.primary.pulsing { animation: pulse 2s ease infinite; }
-        .sd-sidebar { position: sticky; top: 84px; }
-        .sd-sb-tabs { display: flex; background: var(--color-bg-alt); border-radius: var(--radius-sm); padding: 4px; margin-bottom: 16px; border: 1px solid var(--color-border); }
-        .sd-sb-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 6px; font-size: 13px; font-weight: 600; color: var(--color-text-muted); border-radius: 6px; transition: all 0.3s ease; }
-        .sd-sb-tab.active { background: #fff; color: var(--color-text); box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-        .sd-sb-tab-badge { font-size: 11px; padding: 0 7px; border-radius: 100px; background: var(--color-border); color: var(--color-text-muted); line-height: 18px; }
-        .sd-sb-tab-badge.urgent { background: var(--color-error); color: #fff; }
-        .sd-sb-content { background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 16px; }
-        .sd-todo-list { display: flex; flex-direction: column; gap: 10px; }
-        .sd-todo-empty { text-align: center; padding: 32px 16px; font-size: 14px; color: var(--color-text-muted); }
-        .sd-todo-item { background: var(--color-bg); border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--color-border); transition: all 0.25s; }
-        .sd-todo-item:hover { border-color: var(--color-primary); }
-        .sd-todo-time { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--color-primary); margin-bottom: 8px; }
-        .sd-todo-body { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
-        .sd-todo-emoji { font-size: 24px; }
-        .sd-todo-info { display: flex; flex-direction: column; gap: 2px; }
-        .sd-todo-service { font-size: 13px; font-weight: 600; color: var(--color-text); }
-        .sd-todo-address { font-size: 11px; color: var(--color-text-muted); display: flex; align-items: center; gap: 3px; }
-        .sd-todo-btn { width: 100%; padding: 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; text-align: center; background: var(--color-primary-gradient); color: #fff; transition: all 0.25s; }
-        .sd-todo-btn:hover { box-shadow: 0 4px 12px rgba(255,125,90,0.3); }
-        .sd-notif-list { display: flex; flex-direction: column; gap: 12px; }
-        .sd-notif-card { background: #fff; border-radius: var(--radius-sm); padding: 14px; border: 1px solid var(--color-border); box-shadow: 0 2px 8px rgba(255,125,90,0.06); animation: expandIn 0.35s ease; }
-        .sd-notif-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); }
-        .sd-notif-icon { font-size: 16px; }
-        .sd-notif-title { font-size: 13px; font-weight: 700; color: var(--color-text); flex: 1; }
-        .sd-countdown { font-size: 12px; font-weight: 700; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
-        .sd-countdown.urgent { color: var(--color-error); animation: pulse 1.5s ease infinite; }
-        .sd-countdown.expired { color: var(--color-text-muted); }
-        .sd-notif-body { display: flex; gap: 10px; margin-bottom: 12px; }
-        .sd-notif-emoji { font-size: 24px; }
-        .sd-notif-info { display: flex; flex-direction: column; gap: 2px; }
-        .sd-notif-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
-        .sd-notif-service { font-size: 12px; color: var(--color-text-muted); }
-        .sd-notif-price { font-size: 16px; font-weight: 800; color: var(--color-primary); }
-        .sd-notif-actions { display: flex; gap: 8px; }
-        .sd-notif-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 9px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; transition: all 0.25s; }
-        .sd-notif-btn.accept { background: var(--color-primary-gradient); color: #fff; box-shadow: 0 3px 10px rgba(255,125,90,0.2); }
-        .sd-notif-btn.accept:hover { box-shadow: 0 6px 20px rgba(255,125,90,0.3); }
-        .sd-notif-btn.reject { border: 1px solid var(--color-border); color: var(--color-text-secondary); }
-        .sd-notif-btn.reject:hover { border-color: var(--color-error); color: var(--color-error); background: #FFF0F0; }
-        @media (max-width: 1024px) { .sd-main-layout { grid-template-columns: 1fr; } .sd-sidebar { position: static; } }
-        @media (max-width: 768px) { .sd-income-grid { grid-template-columns: repeat(2, 1fr); } .sd-si-body { flex-direction: column; align-items: center; text-align: center; } .sd-si-info { align-items: center; } .sd-si-actions { justify-content: center; flex-wrap: wrap; } }
-        @media (max-width: 480px) { .sd-income-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .sd-income-card { padding: 14px 16px; } .sd-ic-value { font-size: 22px; } }
+        .sd-welcome-text h2 { font-size: 20px; font-weight: 800; margin: 0; }
+        .sd-welcome-text p { font-size: 13px; opacity: 0.85; margin: 4px 0 0; }
+        .sd-welcome-badge {
+          display: flex; align-items: center; gap: 4px; padding: 6px 12px;
+          border-radius: 100px; background: rgba(255,255,255,0.2); font-size: 13px;
+          font-weight: 600; white-space: nowrap;
+        }
+        .sd-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .sd-stat-card {
+          background: #fff; border-radius: 14px; padding: 16px;
+          display: flex; align-items: center; gap: 14px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .sd-stat-card.primary { background: linear-gradient(135deg, #FFF5F0, #FFE8E0); }
+        .sd-stat-icon {
+          width: 42px; height: 42px; border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(255,125,90,0.15); color: #FF7D5A; flex-shrink: 0;
+        }
+        .sd-stat-icon.week { background: rgba(69,183,160,0.15); color: #45B7A0; }
+        .sd-stat-icon.month { background: rgba(74,144,217,0.15); color: #4A90D9; }
+        .sd-stat-icon.total { background: rgba(255,217,61,0.2); color: #D4A800; }
+        .sd-stat-body { display: flex; flex-direction: column; gap: 2px; }
+        .sd-stat-value { font-size: 20px; font-weight: 800; color: #1A1A2E; line-height: 1.1; }
+        .sd-stat-label { font-size: 12px; color: #8E8EA0; font-weight: 500; }
+        .sd-section { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .sd-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .sd-section-header h3 { font-size: 15px; font-weight: 700; color: #1A1A2E; margin: 0; }
+        .sd-section-more { display: flex; align-items: center; gap: 2px; font-size: 12px; color: #8E8EA0; cursor: pointer; }
+        .sd-section-badge {
+          padding: 2px 10px; border-radius: 100px; background: #FF7D5A; color: #fff;
+          font-size: 12px; font-weight: 700;
+        }
+        .sd-empty { text-align: center; padding: 24px; color: #8E8EA0; font-size: 13px; }
+        .sd-timeline { display: flex; flex-direction: column; gap: 0; }
+        .sd-tl-item {
+          display: flex; align-items: center; gap: 12px; padding: 12px 0;
+          border-bottom: 1px solid #F5F6FA; cursor: pointer;
+        }
+        .sd-tl-item:last-child { border-bottom: none; }
+        .sd-tl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .sd-tl-body { flex: 1; }
+        .sd-tl-top { display: flex; justify-content: space-between; align-items: center; }
+        .sd-tl-service { font-size: 13px; font-weight: 600; color: #1A1A2E; }
+        .sd-tl-status { font-size: 11px; font-weight: 600; }
+        .sd-tl-info { display: flex; justify-content: space-between; font-size: 12px; color: #8E8EA0; margin-top: 2px; }
+        .sd-tl-arrow { color: #D0D0D8; flex-shrink: 0; }
+        .sd-pending-list { display: flex; flex-direction: column; gap: 8px; }
+        .sd-pending-item {
+          padding: 14px; border-radius: 12px; background: #FFFBF5;
+          border: 1px solid #FFE8D0;
+        }
+        .sd-pi-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .sd-pi-service { font-size: 13px; font-weight: 600; color: #1A1A2E; }
+        .sd-pi-price { font-size: 16px; font-weight: 800; color: #FF7D5A; }
+        .sd-pi-info { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #8E8EA0; margin-bottom: 10px; }
+        .sd-pi-actions { display: flex; gap: 8px; }
+        .sd-btn {
+          flex: 1; padding: 8px; border-radius: 8px; font-size: 13px; font-weight: 600;
+          cursor: pointer; text-align: center; transition: all 0.2s;
+        }
+        .sd-btn-primary { background: #FF7D5A; color: #fff; }
+        .sd-btn-primary:hover { opacity: 0.9; }
+        .sd-btn-outline { border: 1px solid #EEEEF2; color: #8E8EA0; }
+        .sd-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .sd-action-card {
+          display: flex; flex-direction: column; align-items: center; gap: 8px;
+          padding: 16px 12px; border-radius: 12px; background: #FAFBFC;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .sd-action-card:hover { background: #F0F2F5; }
+        .sd-action-icon {
+          width: 44px; height: 44px; border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .sd-action-card span { font-size: 12px; font-weight: 600; color: #1A1A2E; }
       `}</style>
     </div>
   )

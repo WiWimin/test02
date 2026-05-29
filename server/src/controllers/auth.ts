@@ -69,7 +69,10 @@ export async function getMe(req: AuthRequest, res: Response, next: NextFunction)
       select: { id: true, name: true, phone: true, role: true, avatar: true, account: true, status: true, sitter_status: true },
     })
     if (user?.role === 'sitter') {
-      const profile = await prisma.sitterProfile.findUnique({ where: { user_id: user.id } })
+      const profile = await prisma.sitterProfile.findUnique({
+        where: { user_id: user.id },
+        include: { areas: true, certs: { where: { status: 'verified' }, select: { label: true } } },
+      })
       return success(res, { ...user, sitter_profile: profile })
     }
     success(res, user)

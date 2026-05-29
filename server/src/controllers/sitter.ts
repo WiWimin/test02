@@ -220,3 +220,20 @@ export async function getApplicationStatus(req: AuthRequest, res: Response, next
     success(res, { status: profile.status, rejected_reason: profile.rejected_reason })
   } catch (err) { next(err) }
 }
+
+export async function updateProfile(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { name, bio, wechat, city } = req.body
+    const data: any = {}
+    if (name !== undefined) data.name = name
+    if (bio !== undefined || wechat !== undefined) {
+      const pd: any = {}
+      if (bio !== undefined) pd.bio = bio
+      if (wechat !== undefined) pd.wechat = wechat
+      if (city !== undefined) pd.city = city
+      await prisma.sitterProfile.update({ where: { user_id: req.user!.id }, data: pd })
+    }
+    if (name !== undefined) await prisma.user.update({ where: { id: req.user!.id }, data: { name } })
+    success(res, { message: '更新成功' })
+  } catch (err) { next(err) }
+}

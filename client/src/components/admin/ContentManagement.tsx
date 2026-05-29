@@ -16,7 +16,11 @@ export default function ContentManagement() {
   const [banners, setBanners] = useState<any[]>([])
   const [announcements, setAnnouncements] = useState<any[]>([])
   const [faqs, setFaqs] = useState<any[]>([])
-  useEffect(() => { api.get<any>('/admin/content').then(data => { setBanners(data.banners || []); setAnnouncements(data.announcements || []); setFaqs(data.faqs || []) }) }, [])
+  useEffect(() => {
+    api.get<any[]>('/admin/banners').then(d => setBanners(d || [])).catch(() => {})
+    api.get<any[]>('/admin/announcements').then(d => setAnnouncements(d || [])).catch(() => {})
+    api.get<any[]>('/admin/faqs').then(d => setFaqs(d || [])).catch(() => {})
+  }, [])
 
   const tabs = [
     { key: 'banners', label: 'Banner管理', icon: ImageIcon, count: banners.length },
@@ -65,7 +69,7 @@ export default function ContentManagement() {
                 </div>
                 <div className="cm-banner-actions">
                   <button className="cm-icon-btn"><Edit3 size={14} /></button>
-                  <button className="cm-icon-btn" onClick={async () => { await api.delete('/admin/content/' + b.id); setBanners(prev => prev.filter(x => x.id !== b.id)) }}><Trash2 size={14} /></button>
+                  <button className="cm-icon-btn" onClick={async () => { await api.delete('/admin/banners/' + b.id); setBanners(prev => prev.filter(x => x.id !== b.id)) }}><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}

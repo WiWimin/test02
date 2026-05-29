@@ -1,155 +1,126 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Phone, MessageCircle, MapPin, Clock, CheckCircle, Circle, ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Phone, MessageCircle, MapPin, CheckCircle, Clock } from 'lucide-react'
 import { api } from '../../utils/api'
-
-const emptyOrder = {
-  id: '', petEmoji: '', petName: '', serviceName: '',
-  date: '', time: '', address: '',
-  price: 0, status: 'pending', payStatus: '',
-  ownerName: '', ownerPhone: '',
-  note: '',
-}
 
 const steps = [
   { key: 'accepted', label: '已接单' },
   { key: 'in_progress', label: '服务中' },
   { key: 'completed', label: '已完成' },
-  { key: 'review', label: '待评价' },
 ]
 
 export default function SitterOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [order, setOrder] = useState<any>(emptyOrder)
+  const [order, setOrder] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (id) api.get('/orders/' + id).then(setOrder)
+    if (!id) return
+    api.get<any>('/orders/' + id).then(setOrder).catch(() => {}).finally(() => setLoading(false))
   }, [id])
 
+  if (loading) return <div className="sod-loading">加载中...</div>
+  if (!order) return <div className="sod-loading">订单不存在</div>
+
   const currentStep = steps.findIndex(s => s.key === order.status)
+  const isPending = order.status === 'pending_accept'
 
   return (
     <div className="sod-page">
-      <div className="sod-top">
+      <div className="sod-topbar">
         <button className="sod-back" onClick={() => navigate('/sitter/orders')}><ChevronLeft size={20} /></button>
-        <h1>订单详情</h1>
+        <h2>订单详情</h2>
+        <div />
       </div>
 
-      <div className="sod-progress">
-        <div className="sod-steps">
-          {steps.map((step, i) => {
-            const done = i <= currentStep
-            const isCurrent = i === currentStep
-            return (
-              <div key={step.key} className={`sod-step ${done ? 'done' : ''} ${isCurrent ? 'current' : ''}`}>
-                <div className="sod-step-icon">{done ? <CheckCircle size={18} /> : <Circle size={18} />}</div>
-                <span className="sod-step-label">{step.label}</span>
-                {i < steps.length - 1 && <div className={`sod-step-line ${done ? 'done' : ''}`} />}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="sod-card">
-        <div className="sod-card-hdr">
-          <span className="sod-card-emoji">{order.petEmoji}</span>
-          <div>
-            <h2>{order.petName} · {order.serviceName}</h2>
-            <span className="sod-card-id">订单号: {order.id}</span>
-          </div>
-        </div>
-        <div className="sod-card-body">
-          <div className="sod-info-row"><Clock size={14} /><span>{order.date} {order.time}</span></div>
-          <div className="sod-info-row"><MapPin size={14} /><span>{order.address}</span></div>
-          <div className="sod-info-row"><span className="sod-price">¥{order.price}</span><span className="sod-pay-status">{order.payStatus}</span></div>
-        </div>
-      </div>
-
-      <div className="sod-card">
-        <div className="sod-card-hdr"><h3>主人信息</h3></div>
-        <div className="sod-card-body">
-          <div className="sod-owner-info">
-            <span className="sod-owner-avatar">👤</span>
-            <div>
-              <span className="sod-owner-name">{order.ownerName}</span>
-              <span className="sod-owner-phone">{order.ownerPhone}</span>
+      {!isPending && (
+        <div className="sod-progress">
+          {steps.map((step, i) => (
+            <div key={step.key} className={'sod-step ' + (i <= currentStep ? 'done ' : '') + (i === currentStep ? 'current' : '')}>
+              <div className="sod-step-dot">{i <= currentStep ? <CheckCircle size={14} /> : i + 1}</div>
+              <span className="sod-step-label">{step.label}</span>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {order.note && (
-        <div className="sod-card">
-          <div className="sod-card-hdr"><h3>服务备注</h3></div>
-          <div className="sod-card-body">
-            <p className="sod-note">{order.note}</p>
-          </div>
+          ))}
         </div>
       )}
 
-      <div className="sod-actions">
-        <button className="sod-action-btn outline" onClick={() => alert(`拨打 ${order.ownerPhone}`)}>
-          <Phone size={16} /> 联系主人
-        </button>
-        <button className="sod-action-btn outline" onClick={() => navigate(`/chat/${order.id}`)}>
-          <MessageCircle size={16} /> 发消息
-        </button>
-        <button className="sod-action-btn outline" onClick={() => alert(`导航至: ${order.address}`)}>
-          <MapPin size={16} /> 导航前往
-        </button>
-        {order.status === 'in_progress' && (
-          <button className="sod-action-btn primary" onClick={() => api.put('/orders/' + order.id + '/complete').then(() => setOrder({ ...order, status: 'completed' }))}>
-            <CheckCircle size={16} /> 完成服务
-          </button>
-        )}
-        {order.status === 'accepted' && (
-          <button className="sod-action-btn primary" onClick={() => api.put('/orders/' + order.id + '/start').then(() => setOrder({ ...order, status: 'in_progress' }))}>
-            <MapPin size={16} /> 开始服务
-          </button>
-        )}
+      <div className="sod-card">
+        <div className="sod-card-header">
+          <span className="sod-service">{order.serviceName || order.service?.name || '宠物服务'}</span>
+          <span className="sod-price">¥{order.total || order.totalPrice || 0}</span>
+        </div>
+        <div className="sod-meta">
+          <span><Clock size={13} /> {order.service_time || order.time || '-'}</span>
+          <span><MapPin size={13} /> {order.address || order.addressDetail || '-'}</span>
+        </div>
+        {order.note && <div className="sod-note">备注：{order.note}</div>}
+      </div>
+
+      <div className="sod-card">
+        <div className="sod-card-title">主人信息</div>
+        <div className="sod-owner">
+          <div className="sod-avatar">{order.owner?.avatar || '👤'}</div>
+          <div>
+            <div className="sod-owner-name">{order.ownerName || order.owner?.name || '主人'}</div>
+            <div className="sod-owner-phone">{order.ownerPhone || order.owner?.phone || ''}</div>
+          </div>
+        </div>
+        <div className="sod-actions-row">
+          <button className="sod-action-btn"><Phone size={14} /> 电话</button>
+          <button className="sod-action-btn" onClick={() => navigate('/chat/' + order.id)}><MessageCircle size={14} /> 消息</button>
+        </div>
+      </div>
+
+      <div className="sod-bottom">
+        {isPending ? (
+          <div className="sod-btn-row">
+            <button className="sod-btn sod-btn-secondary" onClick={async () => { try { await api.put('/orders/' + id + '/reject'); navigate('/sitter/orders') } catch {} }}>拒绝</button>
+            <button className="sod-btn sod-btn-primary" onClick={async () => { try { await api.put('/orders/' + id + '/accept'); setOrder({ ...order, status: 'accepted' }) } catch {} }}>接单</button>
+          </div>
+        ) : order.status === 'accepted' ? (
+          <button className="sod-btn sod-btn-primary" onClick={async () => { try { await api.put('/orders/' + id + '/start'); setOrder({ ...order, status: 'in_progress' }) } catch {} }}>开始服务</button>
+        ) : order.status === 'in_progress' ? (
+          <button className="sod-btn sod-btn-primary" onClick={async () => { try { await api.put('/orders/' + id + '/complete'); setOrder({ ...order, status: 'completed' }) } catch {} }}>完成服务</button>
+        ) : null}
       </div>
 
       <style>{`
-        .sod-page { max-width: 640px; margin: 0 auto; }
-        .sod-top { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-        .sod-back { width: 36px; height: 36px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; color: var(--color-text-secondary); transition: all 0.25s; }
-        .sod-back:hover { background: rgba(0,0,0,0.04); color: var(--color-text); }
-        .sod-top h1 { font-size: 20px; font-weight: 800; color: var(--color-text); margin: 0; }
-        .sod-progress { background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 20px; margin-bottom: 14px; }
-        .sod-steps { display: flex; align-items: flex-start; justify-content: space-between; }
-        .sod-step { display: flex; flex-direction: column; align-items: center; position: relative; flex: 1; }
-        .sod-step-icon { color: var(--color-border); margin-bottom: 6px; }
-        .sod-step.done .sod-step-icon { color: var(--color-secondary); }
-        .sod-step.current .sod-step-icon { color: var(--color-primary); animation: pulse 2s ease infinite; }
-        .sod-step-label { font-size: 11px; font-weight: 600; color: var(--color-text-muted); white-space: nowrap; }
-        .sod-step.done .sod-step-label { color: var(--color-secondary); }
-        .sod-step.current .sod-step-label { color: var(--color-primary); }
-        .sod-step-line { position: absolute; top: 9px; left: 60%; width: 80%; height: 2px; background: var(--color-border); }
-        .sod-step-line.done { background: var(--color-secondary); }
-        .sod-card { background: #fff; border-radius: var(--radius-md); border: 1px solid var(--color-border); padding: 16px; margin-bottom: 12px; }
-        .sod-card-hdr { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-        .sod-card-hdr h2 { font-size: 16px; font-weight: 700; color: var(--color-text); margin: 0; }
-        .sod-card-hdr h3 { font-size: 14px; font-weight: 700; color: var(--color-text); margin: 0; }
-        .sod-card-emoji { font-size: 36px; }
-        .sod-card-id { display: block; font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
-        .sod-card-body { display: flex; flex-direction: column; gap: 10px; }
-        .sod-info-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-secondary); }
-        .sod-price { font-size: 18px; font-weight: 800; color: var(--color-primary); }
-        .sod-pay-status { font-size: 12px; padding: 2px 8px; border-radius: 100px; background: #E8F8F4; color: #2D9B7A; font-weight: 600; }
-        .sod-owner-info { display: flex; align-items: center; gap: 12px; }
-        .sod-owner-avatar { font-size: 32px; }
-        .sod-owner-name { display: block; font-size: 15px; font-weight: 600; color: var(--color-text); }
-        .sod-owner-phone { font-size: 13px; color: var(--color-text-muted); }
-        .sod-note { font-size: 13px; color: var(--color-text-secondary); line-height: 1.6; margin: 0; background: #FFF8E0; padding: 12px; border-radius: var(--radius-sm); }
-        .sod-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-        .sod-action-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; transition: all 0.25s; cursor: pointer; }
-        .sod-action-btn.outline { border: 1px solid var(--color-border); color: var(--color-text-secondary); background: #fff; }
-        .sod-action-btn.outline:hover { border-color: var(--color-primary); color: var(--color-primary); }
-        .sod-action-btn.primary { background: var(--color-primary-gradient); color: #fff; border: none; grid-column: 1 / -1; box-shadow: 0 4px 14px rgba(255,125,90,0.3); }
-        .sod-action-btn.primary:hover { box-shadow: 0 6px 24px rgba(255,125,90,0.4); transform: translateY(-1px); }
-        @media (max-width: 480px) { .sod-actions { grid-template-columns: 1fr; } }
+        .sod-page { display: flex; flex-direction: column; gap: 12px; padding-bottom: 80px; }
+        .sod-loading { text-align: center; padding: 60px 16px; color: #8E8EA0; font-size: 13px; }
+        .sod-topbar { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
+        .sod-topbar h2 { font-size: 16px; font-weight: 700; color: #1A1A2E; margin: 0; flex: 1; }
+        .sod-back { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #1A1A2E; cursor: pointer; }
+        .sod-progress { display: flex; background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .sod-step { display: flex; align-items: center; gap: 6px; flex: 1; justify-content: center; position: relative; }
+        .sod-step:not(:last-child)::after { content: ''; position: absolute; left: 60%; right: -20%; height: 2px; background: #EEEEF2; top: 50%; }
+        .sod-step.done:not(:last-child)::after { background: #45B7A0; }
+        .sod-step-dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: #F0F2F5; color: #8E8EA0; position: relative; z-index: 1; }
+        .sod-step.done .sod-step-dot { background: #45B7A0; color: #fff; }
+        .sod-step.current .sod-step-dot { background: #45B7A0; color: #fff; box-shadow: 0 0 0 4px rgba(69,183,160,0.2); }
+        .sod-step-label { font-size: 11px; color: #8E8EA0; font-weight: 500; }
+        .sod-step.done .sod-step-label { color: #45B7A0; }
+        .sod-step.current .sod-step-label { color: #1A1A2E; font-weight: 600; }
+        .sod-card { background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .sod-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .sod-card-title { font-size: 14px; font-weight: 700; color: #1A1A2E; margin-bottom: 10px; }
+        .sod-service { font-size: 15px; font-weight: 700; color: #1A1A2E; }
+        .sod-price { font-size: 18px; font-weight: 800; color: #FF7D5A; }
+        .sod-meta { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #5A5A7A; }
+        .sod-meta span { display: flex; align-items: center; gap: 5px; }
+        .sod-note { margin-top: 8px; padding: 8px 12px; border-radius: 8px; background: #F8F9FB; font-size: 12px; color: #8E8EA0; }
+        .sod-owner { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .sod-avatar { width: 40px; height: 40px; border-radius: 50%; background: #FFF0EB; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .sod-owner-name { font-size: 14px; font-weight: 600; color: #1A1A2E; }
+        .sod-owner-phone { font-size: 12px; color: #8E8EA0; }
+        .sod-actions-row { display: flex; gap: 8px; }
+        .sod-action-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 600; background: #F5F6FA; color: #5A5A7A; cursor: pointer; }
+        .sod-action-btn:hover { background: #EEEEF2; }
+        .sod-bottom { position: fixed; bottom: 64px; left: 0; right: 0; padding: 12px 16px; background: #fff; border-top: 1px solid #EEEEF2; }
+        .sod-btn-row { display: flex; gap: 10px; }
+        .sod-btn { flex: 1; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; text-align: center; cursor: pointer; }
+        .sod-btn-primary { background: #FF7D5A; color: #fff; }
+        .sod-btn-secondary { background: #F5F6FA; color: #5A5A7A; }
       `}</style>
     </div>
   )

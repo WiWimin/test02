@@ -45,7 +45,7 @@ function UserDetailModal({ user, onClose }: { user: any; onClose: () => void }) 
 
 export default function UserManagement() {
   const [users, setUsers] = useState<any[]>([])
-  useEffect(() => { api.get<any[]>('/admin/users').then(setUsers) }, [])
+  useEffect(() => { api.get<any>('/admin/users').then(d => setUsers(Array.isArray(d) ? d : d?.items || [])).catch(() => setUsers([])) }, [])
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -100,7 +100,7 @@ export default function UserManagement() {
                   <td><span className="um-status-badge" style={{ background: st.bg, color: st.color }}><span className="um-status-dot" style={{ background: st.dot }} />{st.label}</span></td>
                   <td><span className="um-num">{u.orders}</span></td>
                   <td className="um-td-muted">{u.registerDate}</td>
-                  <td><div className="um-td-actions"><button className="um-action-btn" onClick={() => setSelectedUser(u)} title="查看详情"><Eye size={15} /></button><button className={`um-action-btn ${u.status === 'banned' ? 'warn' : 'danger'}`} title={u.status === 'banned' ? '解封' : '封禁'} onClick={async () => { const action = u.status === 'banned' ? 'unban' : 'ban'; await api.put('/admin/users/' + u.id + '/' + action); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: action === 'ban' ? 'banned' : 'active' } : x)) }}>{u.status === 'banned' ? <ShieldCheck size={15} /> : <Ban size={15} />}</button></div></td>
+                  <td><div className="um-td-actions"><button className="um-action-btn" onClick={() => setSelectedUser(u)} title="查看详情"><Eye size={15} /></button><button className={`um-action-btn ${u.status === 'banned' ? 'warn' : 'danger'}`} title={u.status === 'banned' ? '解封' : '封禁'} onClick={async () => { await api.put('/admin/users/' + u.id + '/ban'); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: x.status === 'banned' ? 'active' : 'banned' } : x)) }}>{u.status === 'banned' ? <ShieldCheck size={15} /> : <Ban size={15} />}</button></div></td>
                 </tr>
               )
             })}

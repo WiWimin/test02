@@ -5,7 +5,7 @@ import {
   ShieldCheck, ArrowLeft, CheckCircle2, XCircle,
   MessageCircle, Smartphone, CreditCard, User as UserIcon
 } from 'lucide-react'
-import { login, register, UserRole } from '../utils/auth'
+import { login, register, UserRole, getCurrentUser } from '../utils/auth'
 
 const roleLabels: Record<UserRole, string> = {
   owner: '宠物主人',
@@ -168,18 +168,20 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
   /* ── Handlers ── */
 
   const doRedirect = () => {
+    const cached = getCurrentUser()
+    const userRole: UserRole = cached?.role || role
     const pending = sessionStorage.getItem('pendingBooking')
-    if (pending && role === 'owner') {
+    if (pending && userRole === 'owner') {
       sessionStorage.removeItem('pendingBooking')
       const state = JSON.parse(pending)
       navigate('/booking/new', { state })
     } else if (redirectTo) {
       navigate(redirectTo)
-    } else if (role === 'owner') {
+    } else if (userRole === 'owner') {
       navigate('/home/owner')
-    } else if (role === 'sitter') {
+    } else if (userRole === 'sitter') {
       navigate('/sitter/dashboard')
-    } else if (role === 'admin') {
+    } else if (userRole === 'admin') {
       navigate('/admin/dashboard')
     } else {
       navigate('/')
