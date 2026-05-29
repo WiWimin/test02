@@ -1,100 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Star, MapPin, ShieldCheck, Check, ChevronRight,
   Clock, Calendar, Image as ImageIcon, Phone, MessageCircle
 } from 'lucide-react'
+import { api } from '../utils/api'
 import { isLoggedIn } from '../utils/auth'
 import RegisterPrompt from './RegisterPrompt'
-
-/* ── Mock Data ── */
-
-const sitterData: Record<string, {
-  name: string; avatar: string; bgColor: string; rating: number;
-  reviews: number; distance: string; badges: string[]; desc: string;
-  services: { id: string; name: string; duration: string; price: number; desc: string }[];
-  timeSlots: { date: string; slots: { time: string; available: boolean }[] }[];
-  reviewList: { user: string; avatar: string; rating: number; text: string; date: string; images: number }[];
-}> = {
-  'dog-walk': {
-    name: '张阿姨', avatar: '👩', bgColor: '#FFF0EB', rating: 4.9, reviews: 128, distance: '1.2km',
-    badges: ['实名认证', '宠物护理证', '无犯罪记录'],
-    desc: '3年宠物护理经验，温柔耐心，是两位毛孩子的家长，深知每只宠物都是家人。',
-    services: [
-      { id: 'dw-30', name: '上门遛狗', duration: '30分钟', price: 49, desc: '小区或公园遛狗，含排泄物清理、补充饮水' },
-      { id: 'dw-60', name: '上门遛狗', duration: '60分钟', price: 79, desc: '含基础训练互动（坐下、握手），更多陪伴时间' },
-      { id: 'dw-combo', name: '喂食+遛狗组合', duration: '60分钟', price: 99, desc: '喂食+换水+遛狗+简单清洁，一站式服务' },
-      { id: 'dw-clean', name: '遛狗+基础清洁', duration: '90分钟', price: 129, desc: '遛狗+擦脚+毛发梳理+简单清洁' },
-    ],
-    timeSlots: [
-      { date: '今天 5/28', slots: [
-        { time: '09:00', available: true }, { time: '10:00', available: true },
-        { time: '10:30', available: false }, { time: '14:00', available: true },
-        { time: '15:00', available: false }, { time: '16:00', available: true },
-        { time: '17:00', available: true }, { time: '19:00', available: true },
-      ]},
-      { date: '明天 5/29', slots: [
-        { time: '08:00', available: true }, { time: '09:00', available: true },
-        { time: '10:00', available: true }, { time: '11:00', available: true },
-        { time: '14:00', available: true }, { time: '15:00', available: true },
-        { time: '16:00', available: false }, { time: '18:00', available: true },
-      ]},
-      { date: '后天 5/30', slots: [
-        { time: '09:00', available: true }, { time: '10:00', available: true },
-        { time: '11:00', available: true }, { time: '14:00', available: true },
-        { time: '15:00', available: true }, { time: '16:00', available: true },
-        { time: '17:00', available: true }, { time: '20:00', available: true },
-      ]},
-    ],
-    reviewList: [
-      { user: '豆豆妈', avatar: '👩', rating: 5, text: '特别细心，遛狗的时候还发了好多照片给我。豆豆玩得特别开心，以后就找张阿姨了！', date: '2026-05-20', images: 3 },
-      { user: '可乐爸爸', avatar: '👨', rating: 5, text: '非常准时，提前10分钟就到了。对狗狗很有耐心，我家可乐有点怕生但很快就跟阿姨熟了。', date: '2026-05-18', images: 1 },
-      { user: '团子麻麻', avatar: '👩', rating: 4, text: '服务很到位，还帮忙清理了狗窝。唯一就是时间稍微超了一点，但整体非常满意。', date: '2026-05-15', images: 0 },
-      { user: '咪咪主人', avatar: '👨', rating: 5, text: '虽然是遛狗服务，但阿姨对猫咪也很有一套！强烈推荐！', date: '2026-05-12', images: 2 },
-    ],
-  },
-  'sitter-zhang': {
-    name: '张阿姨', avatar: '👩', bgColor: '#FFF0EB', rating: 4.9, reviews: 128, distance: '1.2km',
-    badges: ['实名认证', '宠物护理证', '无犯罪记录'],
-    desc: '3年宠物护理经验，温柔耐心，是两位毛孩子的家长，深知每只宠物都是家人。',
-    services: [
-      { id: 'sz-dw', name: '上门遛狗', duration: '30分钟', price: 49, desc: '小区或公园遛狗，含排泄物清理' },
-      { id: 'sz-dw60', name: '上门遛狗', duration: '60分钟', price: 79, desc: '含基础训练互动，更多陪伴时间' },
-      { id: 'sz-feed', name: '上门喂食', duration: '30分钟', price: 39, desc: '喂食+换水+简单陪伴' },
-      { id: 'sz-clean', name: '宠物清洁', duration: '60分钟', price: 69, desc: '梳毛+擦脚+基础清洁' },
-    ],
-    timeSlots: [
-      { date: '今天 5/28', slots: [
-        { time: '09:00', available: true }, { time: '10:00', available: false },
-        { time: '10:30', available: true }, { time: '14:00', available: true },
-        { time: '15:00', available: true }, { time: '16:00', available: false },
-        { time: '17:00', available: true }, { time: '19:00', available: true },
-      ]},
-      { date: '明天 5/29', slots: [
-        { time: '08:00', available: true }, { time: '09:00', available: true },
-        { time: '10:00', available: true }, { time: '11:00', available: false },
-        { time: '14:00', available: true }, { time: '15:00', available: true },
-        { time: '16:00', available: true }, { time: '18:00', available: true },
-      ]},
-      { date: '后天 5/30', slots: [
-        { time: '09:00', available: true }, { time: '10:00', available: true },
-        { time: '11:00', available: true }, { time: '14:00', available: true },
-        { time: '15:00', available: false }, { time: '16:00', available: true },
-        { time: '17:00', available: true }, { time: '20:00', available: true },
-      ]},
-    ],
-    reviewList: [
-      { user: '豆豆妈', avatar: '👩', rating: 5, text: '特别细心，遛狗的时候还发了好多照片给我。豆豆玩得特别开心！', date: '2026-05-20', images: 3 },
-      { user: '可乐爸爸', avatar: '👨', rating: 5, text: '非常准时，提前10分钟就到了。对狗狗很有耐心。', date: '2026-05-18', images: 1 },
-      { user: '团子麻麻', avatar: '👩', rating: 4, text: '服务很到位，还帮忙清理了狗窝。整体非常满意。', date: '2026-05-15', images: 0 },
-      { user: '咪咪主人', avatar: '👨', rating: 5, text: '对猫咪也很有一套！强烈推荐！', date: '2026-05-12', images: 2 },
-    ],
-  },
-}
-
-const defaultSitter = sitterData['dog-walk']
-
-/* ── Sub-components ── */
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   const full = Math.floor(rating)
@@ -108,30 +20,103 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   )
 }
 
-/* ── Main Component ── */
-
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const sitter = sitterData[id || ''] || defaultSitter
+  const [sitter, setSitter] = useState<any>(null)
+  const [reviews, setReviews] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [selectedServices, setSelectedServices] = useState<string[]>([])
   const [selectedDate, setSelectedDate] = useState(0)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (!id) return
+    const fetchData = async () => {
+      try {
+        const [sitterData, reviewsData] = await Promise.all([
+          api.get<any>(`/sitters/${id}`),
+          api.get<any[]>(`/sitters/${id}/reviews`).catch(() => []),
+        ])
+        setSitter({
+          name: sitterData.name || '服务者',
+          avatar: sitterData.avatar || '👩',
+          bgColor: sitterData.bgColor || '#FFF0EB',
+          rating: sitterData.rating || 0,
+          reviews: sitterData.reviewCount || sitterData.reviews || 0,
+          distance: sitterData.distance || '0km',
+          badges: sitterData.badges || [],
+          desc: sitterData.description || sitterData.desc || '',
+          services: (sitterData.services || []).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            duration: s.duration,
+            price: s.price,
+            desc: s.description || s.desc,
+          })),
+          timeSlots: (sitterData.timeSlots || []).map((ts: any) => ({
+            date: ts.date,
+            slots: (ts.slots || []).map((slot: any) => ({
+              time: slot.time,
+              available: slot.available,
+            })),
+          })),
+          reviewList: (reviewsData || []).map((rv: any) => ({
+            user: rv.user?.name || rv.userName || '用户',
+            avatar: rv.user?.avatar || rv.userAvatar || '👤',
+            rating: rv.rating || 5,
+            text: rv.content || rv.text || '',
+            date: rv.createdAt ? rv.createdAt.slice(0, 10) : '',
+            images: rv.imageCount || rv.images || 0,
+          })),
+        })
+        setReviews(reviewsData || [])
+      } catch (err) {
+        console.error('Failed to fetch sitter detail:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [id])
+
   const total = useMemo(() => {
+    if (!sitter) return 0
     return sitter.services
-      .filter(s => selectedServices.includes(s.id))
-      .reduce((sum, s) => sum + s.price, 0)
-  }, [selectedServices, sitter.services])
+      .filter((s: any) => selectedServices.includes(s.id))
+      .reduce((sum: number, s: any) => sum + s.price, 0)
+  }, [selectedServices, sitter?.services])
 
   const toggleService = (serviceId: string) => {
+    if (!sitter) return
     setSelectedServices(prev =>
       prev.includes(serviceId) ? prev.filter(id => id !== serviceId) : [...prev, serviceId]
     )
   }
 
-  const currentSlots = sitter.timeSlots[selectedDate]
+  const currentSlots = sitter?.timeSlots?.[selectedDate] || { slots: [] }
+
+  if (loading || !sitter) {
+    return (
+      <div className="sd-page">
+        <div className="sd-topbar">
+          <div className="sd-topbar-inner container">
+            <button className="sd-back" onClick={() => navigate(-1)}>
+              <ArrowLeft size={20} />
+              <span>返回</span>
+            </button>
+            <span className="sd-topbar-title">服务详情</span>
+            <div className="sd-topbar-spacer" />
+          </div>
+        </div>
+        <div className="sd-content" style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+          <p style={{ color: '#9E9EB8' }}>加载中...</p>
+        </div>
+        <style>{` .sd-page { min-height: 100vh; background: var(--color-bg); padding-top: 60px; } `}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="sd-page">
@@ -166,7 +151,7 @@ export default function ServiceDetail() {
                   <span>距您{sitter.distance}</span>
                 </div>
                 <div className="sd-sitter-badges">
-                  {sitter.badges.map(b => (
+                  {sitter.badges.map((b: string) => (
                     <span key={b} className="sd-badge"><ShieldCheck size={12} /> {b}</span>
                   ))}
                 </div>
@@ -192,7 +177,7 @@ export default function ServiceDetail() {
               <span className="sd-section-sub">可多选，组合更优惠</span>
             </div>
             <div className="sd-service-list">
-              {sitter.services.map(s => {
+              {sitter.services.map((s: any) => {
                 const selected = selectedServices.includes(s.id)
                 return (
                   <button
@@ -229,7 +214,7 @@ export default function ServiceDetail() {
             </div>
 
             <div className="sd-date-tabs">
-              {sitter.timeSlots.map((d, i) => (
+              {sitter.timeSlots.map((d: any, i: number) => (
                 <button
                   key={d.date}
                   className={`sd-date-tab ${i === selectedDate ? 'active' : ''}`}
@@ -242,7 +227,7 @@ export default function ServiceDetail() {
             </div>
 
             <div className="sd-time-grid">
-              {currentSlots.slots.map(slot => (
+              {currentSlots.slots.map((slot: any) => (
                 <button
                   key={`${currentSlots.date}-${slot.time}`}
                   className={`sd-time-slot ${!slot.available ? 'unavailable' : ''} ${selectedTime === slot.time ? 'selected' : ''}`}
@@ -272,7 +257,9 @@ export default function ServiceDetail() {
               </div>
               <div className="sd-rs-bars">
                 {[5, 4, 3, 2, 1].map(star => {
-                  const pct = Math.max(5, star === 5 ? 78 : star === 4 ? 15 : star === 3 ? 5 : star === 2 ? 1 : 1)
+                  const pct = reviews.length > 0
+                    ? Math.round((reviews.filter((rv: any) => Math.floor(rv.rating) === star).length / reviews.length) * 100)
+                    : Math.max(5, star === 5 ? 78 : star === 4 ? 15 : star === 3 ? 5 : star === 2 ? 1 : 1)
                   return (
                     <div key={star} className="sd-rs-bar-row">
                       <span className="sd-rs-bar-label">{star}星</span>
@@ -287,7 +274,7 @@ export default function ServiceDetail() {
             </div>
 
             <div className="sd-review-list">
-              {sitter.reviewList.map((rv, i) => (
+              {sitter.reviewList.map((rv: any, i: number) => (
                 <div key={i} className="sd-review-card">
                   <div className="sd-rc-header">
                     <div className="sd-rc-user">
@@ -318,11 +305,9 @@ export default function ServiceDetail() {
           </div>
         </section>
 
-        {/* Spacer for fixed bottom bar */}
         <div className="sd-bottom-spacer" />
       </div>
 
-      {/* Register prompt for non-logged-in users */}
       {!isLoggedIn() && (
         <div className="container" style={{ padding: '0 24px', marginBottom: 8 }}>
           <RegisterPrompt variant="inline" />
@@ -347,7 +332,7 @@ export default function ServiceDetail() {
                 sitterId: id,
                 sitterName: sitter.name,
                 sitterAvatar: sitter.avatar,
-                selectedServices: sitter.services.filter(s => selectedServices.includes(s.id)).map(s => ({ id: s.id, name: s.name, duration: s.duration, price: s.price })),
+                selectedServices: sitter.services.filter((s: any) => selectedServices.includes(s.id)).map((s: any) => ({ id: s.id, name: s.name, duration: s.duration, price: s.price })),
                 selectedDate: currentSlots.date,
                 selectedTime,
                 total,
@@ -365,7 +350,6 @@ export default function ServiceDetail() {
         </div>
       </div>
 
-      {/* ── Styles ── */}
       <style>{`
         .sd-page {
           min-height: 100vh;

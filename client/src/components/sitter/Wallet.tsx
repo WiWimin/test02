@@ -1,32 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { DollarSign, Calendar, TrendingUp, Users, Download, ArrowUpRight } from 'lucide-react'
-
-const stats = [
-  { label: '今日收入', value: 320, change: '+12%', up: true, icon: DollarSign, color: '#FF7D5A' },
-  { label: '本周收入', value: 1280, change: '+8%', up: true, icon: TrendingUp, color: '#45B7A0' },
-  { label: '本月收入', value: 4560, change: '+15%', up: true, icon: Calendar, color: '#4A90D9' },
-  { label: '总收入', value: 22300, change: '+22%', up: true, icon: Users, color: '#9B59B6' },
-]
-
-const weeklyData = [
-  { day: '05/22', value: 120 }, { day: '05/23', value: 80 },
-  { day: '05/24', value: 160 }, { day: '05/25', value: 200 },
-  { day: '05/26', value: 90 }, { day: '05/27', value: 140 },
-  { day: '05/28', value: 180 },
-]
-
-const transactions = [
-  { id: 'tx-1', type: 'income' as const, petEmoji: '🐕', petName: '豆豆', serviceName: '遛狗 60分钟', amount: 79, date: '05/28 10:00', settled: true },
-  { id: 'tx-2', type: 'income' as const, petEmoji: '🐈', petName: '咪咪', serviceName: '上门喂猫', amount: 39, date: '05/28 14:00', settled: true },
-  { id: 'tx-3', type: 'income' as const, petEmoji: '🐕', petName: '可乐', serviceName: '遛狗 60分钟', amount: 69, date: '05/27 09:00', settled: true },
-  { id: 'tx-4', type: 'income' as const, petEmoji: '🐕', petName: '团子', serviceName: '遛狗+清洁', amount: 99, date: '05/26 16:00', settled: true },
-  { id: 'tx-5', type: 'withdraw' as const, petEmoji: '💳', petName: '', serviceName: '提现', amount: -200, date: '05/25 10:00', settled: true },
-]
-
-const maxVal = Math.max(...weeklyData.map(d => d.value))
+import { api } from '../../utils/api'
 
 export default function Wallet() {
+  const [stats, setStats] = useState<any[]>([])
+  const [weeklyData, setWeeklyData] = useState<any[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [period, setPeriod] = useState('week')
+
+  useEffect(() => {
+    api.get('/wallet').then((data: any) => {
+      setStats(data.stats || [])
+      setWeeklyData(data.weeklyData || [])
+      setTransactions(data.transactions || [])
+    })
+  }, [])
+
+  const maxVal = Math.max(0, ...weeklyData.map(d => d.value))
 
   return (
     <div className="wl-page">

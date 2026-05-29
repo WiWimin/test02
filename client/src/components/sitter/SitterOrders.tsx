@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Clock, MapPin, Phone, MessageCircle, Check, X, AlertCircle } from 'lucide-react'
+import { api } from '../../utils/api'
 
 interface Order {
   id: string; petEmoji: string; petName: string; serviceName: string;
@@ -8,17 +9,6 @@ interface Order {
   status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
   createdAt: string; date: string; time: string;
 }
-
-const mockOrders: Order[] = [
-  { id: 'ORD-001', petEmoji: '🐕', petName: '豆豆', serviceName: '遛狗 60分钟', address: '望京SOHO T3 1808', price: 79, ownerName: '李先生', ownerPhone: '138****8888', status: 'pending', createdAt: new Date(Date.now() - 2 * 60000).toISOString(), date: '2026-05-28', time: '10:00' },
-  { id: 'ORD-002', petEmoji: '🐈', petName: '咪咪', serviceName: '上门喂猫', address: '融泽嘉园12号院3-1206', price: 39, ownerName: '王女士', ownerPhone: '139****5678', status: 'pending', createdAt: new Date(Date.now() - 5 * 60000).toISOString(), date: '2026-05-28', time: '14:00' },
-  { id: 'ORD-003', petEmoji: '🐕', petName: '可乐', serviceName: '遛狗 60分钟', address: '华润橡树湾5-2-801', price: 69, ownerName: '可乐妈妈', ownerPhone: '139****1234', status: 'accepted', createdAt: new Date(Date.now() - 120 * 60000).toISOString(), date: '2026-05-28', time: '10:00' },
-  { id: 'ORD-004', petEmoji: '🐕', petName: '团子', serviceName: '遛狗+清洁', address: '华联商场后侧2-302', price: 99, ownerName: '团子妈妈', ownerPhone: '137****9012', status: 'in_progress', createdAt: new Date(Date.now() - 240 * 60000).toISOString(), date: '2026-05-28', time: '16:00' },
-  { id: 'ORD-005', petEmoji: '🐈', petName: '花花', serviceName: '上门喂猫', address: '望京西园三区502', price: 39, ownerName: '花花主人', ownerPhone: '158****3456', status: 'completed', createdAt: new Date(Date.now() - 86400 * 1000).toISOString(), date: '2026-05-27', time: '19:00' },
-  { id: 'ORD-006', petEmoji: '🐕', petName: '大毛', serviceName: '遛狗 30分钟', address: '望京SOHO T2 1506', price: 49, ownerName: '王女士', ownerPhone: '136****9999', status: 'completed', createdAt: new Date(Date.now() - 172800 * 1000).toISOString(), date: '2026-05-26', time: '09:00' },
-  { id: 'ORD-007', petEmoji: '🐕', petName: '可乐', serviceName: '宠物清洁', address: '华润橡树湾5-2-801', price: 69, ownerName: '可乐妈妈', ownerPhone: '139****1234', status: 'cancelled', createdAt: new Date(Date.now() - 259200 * 1000).toISOString(), date: '2026-05-25', time: '14:00' },
-  { id: 'ORD-008', petEmoji: '🐈', petName: '雪球', serviceName: '上门喂猫', address: '融泽嘉园8号院1-502', price: 39, ownerName: '刘先生', ownerPhone: '136****5678', status: 'pending', createdAt: new Date().toISOString(), date: '2026-05-29', time: '18:00' },
-]
 
 const tabs = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled']
 
@@ -44,12 +34,17 @@ function CountdownTimer({ createdAt }: { createdAt: string }) {
 
 export default function SitterOrders() {
   const navigate = useNavigate()
+  const [orders, setOrders] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const perPage = 5
 
-  const filtered = mockOrders.filter(o => {
+  useEffect(() => {
+    api.get('/orders').then(setOrders)
+  }, [])
+
+  const filtered = orders.filter(o => {
     const tabMatch = activeTab === 'pending' ? o.status === 'pending' : o.status === activeTab
     const searchMatch = !search || o.petName.includes(search) || o.ownerName.includes(search) || o.id.includes(search)
     return tabMatch && searchMatch
@@ -72,7 +67,7 @@ export default function SitterOrders() {
 
       <div className="so-tabs">
         {tabs.map(tab => {
-          const count = mockOrders.filter(o => tab === 'pending' ? o.status === 'pending' : o.status === tab).length
+          const count = orders.filter(o => tab === 'pending' ? o.status === 'pending' : o.status === tab).length
           return (
             <button key={tab} className={`so-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => { setActiveTab(tab); setPage(1) }}>
               {statusConfig[tab]?.label || tab}
@@ -114,8 +109,8 @@ export default function SitterOrders() {
               </div>
               {isPending && (
                 <div className="so-card-overlay" onClick={e => e.stopPropagation()}>
-                  <button className="so-action-btn reject" onClick={() => alert('已拒单')}><X size={16} /></button>
-                  <button className="so-action-btn accept" onClick={() => alert('已接单')}><Check size={16} /></button>
+                  <button className="so-action-btn reject" onClick={() => api.put('/orders/' + order.id + '/reject').then(() => setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled' } : o)))}><X size={16} /></button>
+                  <button className="so-action-btn accept" onClick={() => api.put('/orders/' + order.id + '/accept').then(() => setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'accepted' } : o)))}><Check size={16} /></button>
                 </div>
               )}
             </div>

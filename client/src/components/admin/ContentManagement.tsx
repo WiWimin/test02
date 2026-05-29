@@ -1,26 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Edit3, Trash2, Eye, Image as ImageIcon, FileText, HelpCircle, Clock } from 'lucide-react'
+import { api } from '../../utils/api'
 
-const initialBanners = [
-  { id: 'BN-001', title: '新人专享 首单立减20元', status: 'active', link: '/register', sort: 1, updatedAt: '2026-05-25', image: '🎉', clicks: 1280 },
-  { id: 'BN-002', title: '夏日特惠 宠物清洁8折', status: 'active', link: '/services/pet-bath', sort: 2, updatedAt: '2026-05-24', image: '☀️', clicks: 856 },
-  { id: 'BN-003', title: '金牌服务者 张阿姨限时特惠', status: 'inactive', link: '/services/sitter-zhang', sort: 3, updatedAt: '2026-05-20', image: '🏅', clicks: 0 },
-]
-
-const initialAnnouncements = [
-  { id: 'AN-001', title: '关于平台服务费调整的通知', status: 'published', date: '2026-05-20', views: 1256, author: '管理员', pinned: true },
-  { id: 'AN-002', title: '2026年端午节服务安排', status: 'published', date: '2026-05-15', views: 2890, author: '运营部', pinned: false },
-  { id: 'AN-003', title: '服务者入驻审核标准更新', status: 'draft', date: '2026-05-28', views: 0, author: '管理员', pinned: false },
-  { id: 'AN-004', title: '夏季宠物防暑温馨提示', status: 'published', date: '2026-05-10', views: 4560, author: '运营部', pinned: false },
-]
-
-const initialFaqs = [
-  { id: 'FAQ-001', question: '如何预约上门服务？', category: '预约', sort: 1, status: 'published' },
-  { id: 'FAQ-002', question: '取消订单后如何退款？', category: '退款', sort: 2, status: 'published' },
-  { id: 'FAQ-003', question: '服务者如何提现？', category: '结算', sort: 3, status: 'published' },
-  { id: 'FAQ-004', question: '服务过程中宠物受伤怎么办？', category: '保障', sort: 4, status: 'published' },
-  { id: 'FAQ-005', question: '如何联系客服？', category: '客服', sort: 5, status: 'draft' },
-]
 
 const categoryColors: Record<string, string> = {
   '预约': '#3B82F6',
@@ -32,9 +13,10 @@ const categoryColors: Record<string, string> = {
 
 export default function ContentManagement() {
   const [tab, setTab] = useState<'banners' | 'announcements' | 'faq'>('banners')
-  const [banners, setBanners] = useState(initialBanners)
-  const [announcements] = useState(initialAnnouncements)
-  const [faqs] = useState(initialFaqs)
+  const [banners, setBanners] = useState<any[]>([])
+  const [announcements, setAnnouncements] = useState<any[]>([])
+  const [faqs, setFaqs] = useState<any[]>([])
+  useEffect(() => { api.get<any>('/admin/content').then(data => { setBanners(data.banners || []); setAnnouncements(data.announcements || []); setFaqs(data.faqs || []) }) }, [])
 
   const tabs = [
     { key: 'banners', label: 'Banner管理', icon: ImageIcon, count: banners.length },
@@ -83,7 +65,7 @@ export default function ContentManagement() {
                 </div>
                 <div className="cm-banner-actions">
                   <button className="cm-icon-btn"><Edit3 size={14} /></button>
-                  <button className="cm-icon-btn" onClick={() => setBanners(prev => prev.filter(x => x.id !== b.id))}><Trash2 size={14} /></button>
+                  <button className="cm-icon-btn" onClick={async () => { await api.delete('/admin/content/' + b.id); setBanners(prev => prev.filter(x => x.id !== b.id)) }}><Trash2 size={14} /></button>
                 </div>
               </div>
             ))}

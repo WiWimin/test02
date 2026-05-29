@@ -1,46 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Star, MapPin, ShieldCheck } from 'lucide-react'
+import { api } from '../utils/api'
 import RegisterPrompt from './RegisterPrompt'
 
-const sitters = [
-  {
-    name: '张阿姨',
-    id: 'sitter-zhang',
-    avatar: '👩',
-    bgColor: '#FFF0EB',
-    rating: 4.9,
-    reviews: 128,
-    distance: '1.2km',
-    tags: ['遛狗', '喂食', '清洁'],
-    badge: '金牌服务者',
-    verified: true,
-  },
-  {
-    name: '李明',
-    id: 'sitter-li',
-    avatar: '👨',
-    bgColor: '#E8F8F4',
-    rating: 4.8,
-    reviews: 96,
-    distance: '2.5km',
-    tags: ['上门喂猫', '遛狗'],
-    badge: '五星服务者',
-    verified: true,
-  },
-  {
-    name: '小王',
-    id: 'sitter-wang',
-    avatar: '👩',
-    bgColor: '#FFF8E0',
-    rating: 4.9,
-    reviews: 203,
-    distance: '0.8km',
-    tags: ['全能服务', '医疗陪护'],
-    badge: '金牌服务者',
-    verified: true,
-  },
-]
+const avatarList = ['👩', '👨', '🧑', '👩', '👨']
+const bgColorList = ['#FFF0EB', '#E8F8F4', '#FFF8E0', '#EFF6FF', '#F0EBFF']
 
 function StarRating({ rating }: { rating: number }) {
   const full = Math.floor(rating)
@@ -60,7 +25,32 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function PopularSitters() {
   const [isVisible, setIsVisible] = useState(false)
+  const [sitters, setSitters] = useState<any[]>([])
   const ref = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const fetchSitters = async () => {
+      try {
+        const res = await api.get<any>('/sitters?sortBy=rating&pageSize=6')
+        const items = (res as any)?.items || []
+        setSitters(items.map((s: any, i: number) => ({
+          name: s.name,
+          id: s.id,
+          avatar: s.avatar || avatarList[i % avatarList.length],
+          bgColor: s.bgColor || bgColorList[i % bgColorList.length],
+          rating: s.rating || 0,
+          reviews: s.reviewCount || s.orderCount || 0,
+          distance: s.distance || '0km',
+          tags: s.tags || ['宠物服务'],
+          badge: s.badge || '推荐服务者',
+          verified: s.verified !== false,
+        })))
+      } catch (err) {
+        console.error('Failed to fetch sitters:', err)
+      }
+    }
+    fetchSitters()
+  }, [])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -107,7 +97,7 @@ export default function PopularSitters() {
                 )}
               </div>
               <div className="sitter-tags">
-                {sitter.tags.map(tag => (
+                {sitter.tags.map((tag: string) => (
                   <span key={tag} className="sitter-tag">{tag}</span>
                 ))}
               </div>
@@ -119,7 +109,6 @@ export default function PopularSitters() {
         </div>
       </div>
 
-      {/* Register prompt */}
       <div className="container" style={{ marginTop: -8 }}>
         <RegisterPrompt variant="card" />
       </div>

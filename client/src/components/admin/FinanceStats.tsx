@@ -1,30 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { TrendingUp, Download, DollarSign, Users, Percent, BarChart3, Wallet, CreditCard, Calendar, ChevronDown } from 'lucide-react'
+import { api } from '../../utils/api'
 
-const monthlyData = [
-  { month: '1月', revenue: 42800, commission: 6420, payout: 36380, orders: 312 },
-  { month: '2月', revenue: 38600, commission: 5790, payout: 32810, orders: 285 },
-  { month: '3月', revenue: 52300, commission: 7845, payout: 44455, orders: 398 },
-  { month: '4月', revenue: 48700, commission: 7305, payout: 41395, orders: 376 },
-  { month: '5月', revenue: 56100, commission: 8415, payout: 47685, orders: 428 },
-]
 
-const recentTransactions = [
-  { id: 'TX-001', order: 'ORD-20260528-001', sitter: '张阿姨', amount: 79, commission: 11.85, payout: 67.15, status: 'settled', date: '2026-05-28', method: '微信支付' },
-  { id: 'TX-002', order: 'ORD-20260527-006', sitter: '陈姐', amount: 69, commission: 10.35, payout: 58.65, status: 'settled', date: '2026-05-27', method: '支付宝' },
-  { id: 'TX-003', order: 'ORD-20260526-008', sitter: '李明', amount: 39, commission: 5.85, payout: 33.15, status: 'settled', date: '2026-05-26', method: '微信支付' },
-  { id: 'TX-004', order: 'ORD-20260525-009', sitter: '小王', amount: 99, commission: 14.85, payout: 84.15, status: 'pending', date: '2026-05-25', method: '余额支付' },
-  { id: 'TX-005', order: 'ORD-20260524-010', sitter: '赵师傅', amount: 79, commission: 11.85, payout: 67.15, status: 'pending', date: '2026-05-24', method: '微信支付' },
-  { id: 'TX-006', order: 'ORD-20260523-011', sitter: '张阿姨', amount: 49, commission: 7.35, payout: 41.65, status: 'settled', date: '2026-05-23', method: '支付宝' },
-  { id: 'TX-007', order: 'ORD-20260522-012', sitter: '小王', amount: 69, commission: 10.35, payout: 58.65, status: 'settled', date: '2026-05-22', method: '微信支付' },
-]
-
-const chartMax = Math.max(...monthlyData.map(d => d.revenue))
 
 const chartColors = ['#FF7D5A', '#45B7A0', '#4A90D9', '#FFD93D', '#9B59B6']
 
 export default function FinanceStats() {
   const [chartTab, setChartTab] = useState<'revenue' | 'commission' | 'orders'>('revenue')
+  const [monthlyData, setMonthlyData] = useState<any[]>([])
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([])
+  useEffect(() => { api.get<any>('/admin/finance').then(data => { setMonthlyData(data.monthlyData || []); setRecentTransactions(data.recentTransactions || []) }) }, [])
+  const chartMax = Math.max(...monthlyData.map(d => d.revenue), 1)
 
   const totalRevenue = monthlyData.reduce((s, d) => s + d.revenue, 0)
   const totalCommission = monthlyData.reduce((s, d) => s + d.commission, 0)

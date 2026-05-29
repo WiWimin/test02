@@ -1,30 +1,75 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   MapPin, Calendar, ChevronRight, Star, Clock, ShieldCheck,
   Dog, Plus, MessageCircle, Heart, ClipboardList
 } from 'lucide-react'
+import { api } from '../../utils/api'
 import { getCurrentUser } from '../../utils/auth'
 
-const todaySchedule = [
-  { id: 'O20240528001', sitter: '张阿姨', avatar: '👩', service: '上门遛狗', time: '10:00-11:00', address: '望京SOHO T3 1808', status: '进行中' },
-  { id: 'O20240528004', sitter: '李阿姨', avatar: '👩', service: '上门喂猫', time: '14:00-14:30', address: '融泽嘉园12号院', status: '待服务' },
-]
+interface TodayScheduleItem {
+  id: string
+  sitter: string
+  avatar: string
+  service: string
+  time: string
+  address: string
+  status: string
+}
 
-const recentOrders = [
-  { id: 'O20240528001', sitter: '张阿姨', service: '上门喂养 - 猫咪', date: '2024-05-28', time: '10:00-11:00', status: '进行中', amount: 88, avatar: '👩' },
-  { id: 'O20240527002', sitter: '李阿姨', service: '遛狗', date: '2024-05-27', time: '14:00-14:30', status: '已完成', amount: 49, avatar: '👩' },
-  { id: 'O20240525003', sitter: '小王', service: '上门喂养 - 狗狗', date: '2024-05-25', time: '09:00-10:00', status: '已完成', amount: 128, avatar: '🧑' },
-]
+interface RecentOrder {
+  id: string
+  sitter: string
+  service: string
+  date: string
+  time: string
+  status: string
+  amount: number
+  avatar: string
+}
 
-const myPets = [
-  { id: 1, name: '咪咪', type: 'cat', breed: '英短', age: '2岁', avatar: '🐱', color: '#FFE0D5' },
-  { id: 2, name: '旺财', type: 'dog', breed: '柯基', age: '1岁', avatar: '🐶', color: '#D5F0EB' },
-]
+interface PetItem {
+  id: number
+  name: string
+  type: string
+  breed: string
+  age: string
+  avatar: string
+  color: string
+}
 
-const favoriteSitters = [
-  { id: 1, name: '张阿姨', avatar: '👩', level: '金牌服务者', score: 4.9, orders: 328, tags: ['经验丰富', '耐心细致'], price: 88 },
-  { id: 2, name: '李阿姨', avatar: '👩', level: '银牌服务者', score: 4.8, orders: 215, tags: ['喜欢小动物', '时间灵活'], price: 49 },
-]
+interface SitterItem {
+  id: number
+  name: string
+  avatar: string
+  level: string
+  score: number
+  orders: number
+  tags: string[]
+  price: number
+}
+
+const statusLabels: Record<string, string> = {
+  accepted: '待服务',
+  in_progress: '进行中',
+  completed: '已完成',
+  pending_pay: '待支付',
+  pending_accept: '待接单',
+  cancelled: '已取消',
+  reviewed: '已评价',
+}
+
+const levelLabels: Record<number, string> = {
+  1: '金牌服务者',
+  2: '银牌服务者',
+  3: '铜牌服务者',
+}
+
+const petTypeConfig: Record<string, { avatar: string; color: string }> = {
+  cat: { avatar: '🐱', color: '#FFE0D5' },
+  dog: { avatar: '🐶', color: '#D5F0EB' },
+  other: { avatar: '🐰', color: '#F0E6FF' },
+}
 
 function PetAvatar({ name, avatar, color }: { name: string; avatar: string; color: string }) {
   return (
@@ -36,7 +81,7 @@ function PetAvatar({ name, avatar, color }: { name: string; avatar: string; colo
   )
 }
 
-function SitterCard({ sitter }: { sitter: typeof favoriteSitters[0] }) {
+function SitterCard({ sitter }: { sitter: SitterItem }) {
   const navigate = useNavigate()
   return (
     <div className="oh-sitter-card" onClick={() => navigate(`/services/${sitter.id}`)}>
@@ -62,6 +107,82 @@ export default function OwnerHome() {
   const navigate = useNavigate()
   const user = getCurrentUser()
   const userName = user?.name || '用户'
+  const [todaySchedule, setTodaySchedule] = useState<TodayScheduleItem[]>([])
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([])
+  const [myPets, setMyPets] = useState<PetItem[]>([])
+  const [favoriteSitters, setFavoriteSitters] = useState<SitterItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [scheduleRes, ordersRes, petsRes, favRes] = await Promise.all([
+          api.get<any[]>('/orders/today').catch(() => []),
+          api.get<{ items: any[] }>('/orders?pageSize=3').catch(() => ({ items: [] })),
+          api.get<any[]>('/pets').catch(() => []),
+          api.get<any[]>('/sitters/favorites').catch(() => []),
+        ])
+
+        const schedule = (scheduleRes || []).map((o: any) => ({
+          id: o.id,
+          sitter: o.sitter?.name || '',
+          avatar: o.sitter?.avatar || '👩',
+          service: o.services?.[0]?.name || '',
+          time: o.service_time || '',
+          address: '',
+          status: statusLabels[o.status] || o.status,
+        }))
+        setTodaySchedule(schedule)
+
+        const orders = ((ordersRes as any)?.items || []).map((o: any) => ({
+          id: o.id,
+          sitter: o.sitter?.name || '',
+          avatar: o.sitter?.avatar || '👩',
+          service: o.services?.[0]?.name || '',
+          date: o.service_date ? new Date(o.service_date).toLocaleDateString('zh-CN') : '',
+          time: o.service_time || '',
+          status: statusLabels[o.status] || o.status,
+          amount: o.total || 0,
+        }))
+        setRecentOrders(orders)
+
+        const pets = (petsRes || []).map((p: any) => {
+          const cfg = petTypeConfig[p.type] || { avatar: '🐾', color: '#F0E6FF' }
+          return {
+            id: p.id,
+            name: p.name || '',
+            type: p.type || 'other',
+            breed: p.breed || '',
+            age: p.age || '',
+            avatar: cfg.avatar,
+            color: cfg.color,
+          }
+        })
+        setMyPets(pets)
+
+        const sitters = (favRes || []).map((f: any) => ({
+          id: f.id,
+          name: f.name || '',
+          avatar: f.avatar || '👩',
+          level: levelLabels[f.level] || `Lv.${f.level}`,
+          score: f.score || 0,
+          orders: f.orders || 0,
+          tags: f.tags || [],
+          price: f.price || 0,
+        }))
+        setFavoriteSitters(sitters)
+      } catch (err) {
+        console.error('Failed to load home data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  if (loading) {
+    return <div className="oh-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
+  }
 
   return (
     <div className="oh-page">

@@ -1,3 +1,5 @@
+import { api, getToken, setToken, removeToken } from './api'
+
 export type UserRole = 'owner' | 'sitter' | 'admin'
 
 export interface UserInfo {
@@ -6,42 +8,66 @@ export interface UserInfo {
   phone: string
   role: UserRole
   avatar: string
+  account?: string
+  sitter_status?: string
+  sitter_profile?: any
 }
-
-const USER_KEY = 'petcare_user'
-const TOKEN_KEY = 'petcare_token'
 
 export function isLoggedIn(): boolean {
-  return localStorage.getItem(TOKEN_KEY) !== null
+  return getToken() !== null
 }
 
-export function login(user: UserInfo) {
-  localStorage.setItem(TOKEN_KEY, 'mock-token-' + Date.now())
-  localStorage.setItem(USER_KEY, JSON.stringify(user))
+export async function login(account: string, password: string): Promise<{ token: string; user: UserInfo }> {
+  const data = await api.post<{ token: string; user: UserInfo }>('/auth/login', { account, password, loginMethod: 'account' })
+  setToken(data.token)
+  const cached = { ...data.user, isLoggedIn: true }
+  localStorage.setItem('petcare_user', JSON.stringify(cached))
+  return data
+}
+
+export async function register(params: {
+  phone: string
+  password: string
+  name: string
+  role: UserRole
+}): Promise<{ token: string; user: UserInfo }> {
+  const data = await api.post<{ token: string; user: UserInfo }>('/auth/register', params)
+  setToken(data.token)
+  const cached = { ...data.user, isLoggedIn: true }
+  localStorage.setItem('petcare_user', JSON.stringify(cached))
+  return data
 }
 
 export function logout() {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
+  removeToken()
+  localStorage.removeItem('petcare_user')
+}
+
+export async function fetchCurrentUser(): Promise<UserInfo | null> {
+  try {
+    return await api.get<UserInfo>('/auth/me')
+  } catch {
+    return null
+  }
 }
 
 export function getCurrentUser(): UserInfo | null {
   try {
-    const raw = localStorage.getItem(USER_KEY)
+    const raw = localStorage.getItem('petcare_user')
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
   }
 }
 
-export function getUserRole(): UserRole | null {
-  return getCurrentUser()?.role || null
+export async function updateUserProfile(patch: Partial<UserInfo>): Promise<UserInfo> {
+  const data = await api.put<UserInfo>('/auth/profile', patch)
+  const cached = getCurrentUser()
+  if (cached) {
+    const updated = { ...cached, ...data }
+    localStorage.setItem('petcare_user', JSON.stringify(updated))
+  }
+  return data
 }
 
-export function updateUserProfile(patch: Partial<UserInfo>) {
-  const user = getCurrentUser()
-  if (user) {
-    const updated = { ...user, ...patch }
-    localStorage.setItem(USER_KEY, JSON.stringify(updated))
-  }
-}
+export { getToken, setToken }

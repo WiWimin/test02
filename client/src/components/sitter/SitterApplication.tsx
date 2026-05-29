@@ -5,6 +5,7 @@ import {
   ChevronRight, ChevronLeft, AlertCircle, Info, Home, Star,
   Camera, FileText, HelpCircle, ShieldCheck
 } from 'lucide-react'
+import { api } from '../../utils/api'
 
 /* ── Types ── */
 
@@ -164,6 +165,12 @@ export default function SitterApplication() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(form))
   }, [form])
 
+  useEffect(() => {
+    api.get('/sitter/application').then((data: any) => {
+      if (data?.status) setSubmitted(data.status)
+    }).catch(() => {})
+  }, [])
+
   const update = useCallback((patch: Partial<FormData>) => {
     setForm(p => ({ ...p, ...patch }))
     setErrors({})
@@ -210,11 +217,13 @@ export default function SitterApplication() {
   const handleSubmit = () => {
     if (!agreed) return
     setSubmitting(true)
-    setTimeout(() => {
+    api.post('/sitter/apply', form).then(() => {
       setSubmitting(false)
       localStorage.removeItem(STORAGE_KEY)
       setSubmitted('pending')
-    }, 1500)
+    }).catch(() => {
+      setSubmitting(false)
+    })
   }
 
   const toggleArea = (area: string) => {

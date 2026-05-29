@@ -1,18 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, ChevronDown, X, Star, ShieldCheck, Ban, Eye, Phone, Calendar, ShoppingBag, PawPrint, Mail, MessageCircle } from 'lucide-react'
-
-const mockUsers = [
-  { id: 'U-001', avatar: '👩', name: '王女士', phone: '138****8888', role: '宠物主人', status: 'active', orders: 12, registerDate: '2026-01-15', pets: 2, email: 'wang@petcare.com', lastActive: '2026-05-28 10:30' },
-  { id: 'U-002', avatar: '👨', name: '李先生', phone: '139****1234', role: '宠物主人', status: 'active', orders: 8, registerDate: '2026-02-20', pets: 1, email: 'li@petcare.com', lastActive: '2026-05-27 16:45' },
-  { id: 'U-003', avatar: '👩', name: '张阿姨', phone: '136****5678', role: '服务者', status: 'active', orders: 128, registerDate: '2025-11-01', pets: 0, email: 'zhang@petcare.com', lastActive: '2026-05-28 09:15', verified: true },
-  { id: 'U-004', avatar: '👨', name: '李明', phone: '137****9012', role: '服务者', status: 'active', orders: 96, registerDate: '2025-12-10', pets: 0, email: 'liming@petcare.com', lastActive: '2026-05-28 08:00', verified: true },
-  { id: 'U-005', avatar: '👩', name: '刘女士', phone: '158****3456', role: '宠物主人', status: 'banned', orders: 1, registerDate: '2026-03-05', pets: 3, email: 'liu@petcare.com', lastActive: '2026-05-20 14:00' },
-  { id: 'U-006', avatar: '👨', name: '赵先生', phone: '186****7890', role: '宠物主人', status: 'active', orders: 5, registerDate: '2026-03-18', pets: 1, email: 'zhao@petcare.com', lastActive: '2026-05-26 11:20' },
-  { id: 'U-007', avatar: '👩', name: '小王', phone: '185****2345', role: '服务者', status: 'active', orders: 203, registerDate: '2025-10-15', pets: 0, email: 'wang@petcare.com', lastActive: '2026-05-28 10:00', verified: true },
-  { id: 'U-008', avatar: '👨', name: '陈先生', phone: '182****6789', role: '宠物主人', status: 'inactive', orders: 0, registerDate: '2026-04-01', pets: 2, email: 'chen@petcare.com', lastActive: '2026-04-01 09:00' },
-  { id: 'U-009', avatar: '👩', name: '孙女士', phone: '187****1111', role: '宠物主人', status: 'active', orders: 23, registerDate: '2026-01-05', pets: 1, email: 'sun@petcare.com', lastActive: '2026-05-27 20:30' },
-  { id: 'U-010', avatar: '👨', name: '周先生', phone: '186****2222', role: '宠物主人', status: 'active', orders: 15, registerDate: '2026-02-14', pets: 2, email: 'zhou@petcare.com', lastActive: '2026-05-28 07:45' },
-]
+import { api } from '../../utils/api'
 
 const statusConfig = {
   active: { label: '正常', bg: 'linear-gradient(135deg, #E8F8F4, #D4F5EC)', color: '#2D9B7A', dot: '#45B7A0' },
@@ -20,7 +8,7 @@ const statusConfig = {
   inactive: { label: '未激活', bg: 'linear-gradient(135deg, #F5F5F7, #EEEFF2)', color: '#8E8EA0', dot: '#B0B0C0' },
 }
 
-function UserDetailModal({ user, onClose }: { user: typeof mockUsers[0]; onClose: () => void }) {
+function UserDetailModal({ user, onClose }: { user: any; onClose: () => void }) {
   if (!user) return null
   const st = statusConfig[user.status as keyof typeof statusConfig]
   return (
@@ -56,13 +44,15 @@ function UserDetailModal({ user, onClose }: { user: typeof mockUsers[0]; onClose
 }
 
 export default function UserManagement() {
+  const [users, setUsers] = useState<any[]>([])
+  useEffect(() => { api.get<any[]>('/admin/users').then(setUsers) }, [])
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [selectedUser, setSelectedUser] = useState<typeof mockUsers[0] | null>(null)
+  const [selectedUser, setSelectedUser] = useState<any | null>(null)
   const [page, setPage] = useState(1)
 
-  const filtered = mockUsers.filter(u => {
+  const filtered = users.filter(u => {
     if (roleFilter !== 'all' && (roleFilter === 'owner' ? u.role !== '宠物主人' : u.role !== '服务者')) return false
     if (statusFilter !== 'all' && u.status !== statusFilter) return false
     if (search && !u.name.includes(search) && !u.id.includes(search) && !u.phone.includes(search)) return false
@@ -76,13 +66,13 @@ export default function UserManagement() {
   return (
     <div className="um-page">
       <div className="um-page-hdr">
-        <div><h1>用户管理</h1><p className="um-subtitle">共 {mockUsers.length} 位注册用户，其中 {mockUsers.filter(u => u.status === 'active').length} 位活跃</p></div>
+        <div><h1>用户管理</h1><p className="um-subtitle">共 {users.length} 位注册用户，其中 {users.filter(u => u.status === 'active').length} 位活跃</p></div>
         <div className="um-hdr-stats">
-          <div className="um-hdr-stat"><span className="um-hdr-num">{mockUsers.length}</span><span>总用户</span></div>
+          <div className="um-hdr-stat"><span className="um-hdr-num">{users.length}</span><span>总用户</span></div>
           <div className="um-hdr-divider" />
-          <div className="um-hdr-stat"><span className="um-hdr-num">{mockUsers.filter(u => u.role === '服务者').length}</span><span>服务者</span></div>
+          <div className="um-hdr-stat"><span className="um-hdr-num">{users.filter(u => u.role === '服务者').length}</span><span>服务者</span></div>
           <div className="um-hdr-divider" />
-          <div className="um-hdr-stat"><span className="um-hdr-num">{mockUsers.filter(u => u.status === 'active').length}</span><span>活跃</span></div>
+          <div className="um-hdr-stat"><span className="um-hdr-num">{users.filter(u => u.status === 'active').length}</span><span>活跃</span></div>
         </div>
       </div>
 
@@ -110,7 +100,7 @@ export default function UserManagement() {
                   <td><span className="um-status-badge" style={{ background: st.bg, color: st.color }}><span className="um-status-dot" style={{ background: st.dot }} />{st.label}</span></td>
                   <td><span className="um-num">{u.orders}</span></td>
                   <td className="um-td-muted">{u.registerDate}</td>
-                  <td><div className="um-td-actions"><button className="um-action-btn" onClick={() => setSelectedUser(u)} title="查看详情"><Eye size={15} /></button><button className={`um-action-btn ${u.status === 'banned' ? 'warn' : 'danger'}`} title={u.status === 'banned' ? '解封' : '封禁'}>{u.status === 'banned' ? <ShieldCheck size={15} /> : <Ban size={15} />}</button></div></td>
+                  <td><div className="um-td-actions"><button className="um-action-btn" onClick={() => setSelectedUser(u)} title="查看详情"><Eye size={15} /></button><button className={`um-action-btn ${u.status === 'banned' ? 'warn' : 'danger'}`} title={u.status === 'banned' ? '解封' : '封禁'} onClick={async () => { const action = u.status === 'banned' ? 'unban' : 'ban'; await api.put('/admin/users/' + u.id + '/' + action); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: action === 'ban' ? 'banned' : 'active' } : x)) }}>{u.status === 'banned' ? <ShieldCheck size={15} /> : <Ban size={15} />}</button></div></td>
                 </tr>
               )
             })}

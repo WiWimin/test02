@@ -1,0 +1,451 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String  @id @default(uuid())
+  account       String? @unique
+  phone         String  @unique
+  password_hash String
+  name          String
+  role          String  @default("owner")
+  avatar        String?
+  status        String  @default("active")
+  sitter_status String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  sitter_profile        SitterProfile?
+  pets                  Pet[]
+  addresses             Address[]
+  orders_as_owner       Order[]             @relation("OwnerOrders")
+  orders_as_sitter      Order[]             @relation("SitterOrders")
+  reviews_given         Review[]            @relation("ReviewOwner")
+  reviews_received      Review[]            @relation("ReviewSitter")
+  messages              Message[]
+  notification_settings UserNotificationSettings?
+  favorites             Favorite[]          @relation("FavoriteOwner")
+  favorited_by          Favorite[]          @relation("FavoriteSitter")
+  conversations         ConversationParticipant[]
+  transactions          Transaction[]
+  admin_user            AdminUser?
+
+  @@map("users")
+}
+
+model SitterProfile {
+  id            String  @id @default(uuid())
+  user_id       String  @unique
+  level         Int     @default(1)
+  bio           String?
+  city          String?
+  wechat        String?
+  rating        Float   @default(0)
+  total_orders  Int     @default(0)
+  max_distance  Int     @default(5)
+  workday_start String  @default("09:00")
+  workday_end   String  @default("20:00")
+  weekend_start String  @default("10:00")
+  weekend_end   String  @default("18:00")
+  status        String  @default("pending")
+  rejected_reason String?
+  online        Boolean @default(false)
+  latitude      Float?
+  longitude     Float?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  user     User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  services Service[]
+  areas    SitterArea[]
+  certs    SitterCert[]
+
+  @@map("sitter_profiles")
+}
+
+model SitterCert {
+  id         String   @id @default(uuid())
+  sitter_id  String
+  label      String
+  file_url   String?
+  required   Boolean  @default(false)
+  status     String   @default("missing")
+  created_at DateTime @default(now())
+
+  sitter SitterProfile @relation(fields: [sitter_id], references: [id], onDelete: Cascade)
+
+  @@map("sitter_certs")
+}
+
+model SitterArea {
+  id        String @id @default(uuid())
+  sitter_id String
+  area      String
+
+  sitter SitterProfile @relation(fields: [sitter_id], references: [id], onDelete: Cascade)
+
+  @@map("sitter_areas")
+}
+
+model Service {
+  id               String  @id @default(uuid())
+  sitter_id        String
+  icon             String?
+  name             String
+  price            Float
+  duration         Int
+  description      String?
+  status           String  @default("active")
+  category         String?
+  completed_orders Int     @default(0)
+
+  sitter        SitterProfile  @relation(fields: [sitter_id], references: [id], onDelete: Cascade)
+  order_services OrderService[]
+
+  @@map("services")
+}
+
+model Pet {
+  id         String   @id @default(uuid())
+  owner_id   String
+  name       String
+  type       String   @default("dog")
+  breed      String?
+  age        String?
+  weight     String?
+  gender     String   @default("male")
+  avatar     String?
+  color      String?
+  note       String?
+  birthday   DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  owner     User      @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  order_pets OrderPet[]
+
+  @@map("pets")
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  user_id    String
+  name       String
+  phone      String
+  tag        String   @default("other")
+  address    String
+  detail     String?
+  is_default Boolean  @default(false)
+  latitude   Float?
+  longitude  Float?
+  deleted_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@map("addresses")
+}
+
+model Order {
+  id              String   @id @default(uuid())
+  order_no        String   @unique
+  owner_id        String
+  sitter_id       String
+  address_id      String?
+  status          String   @default("pending_pay")
+  total           Float    @default(0)
+  note            String?
+  cancel_reason   String?
+
+  service_date    DateTime?
+  service_time    String?
+  accept_deadline DateTime?
+  accepted_at     DateTime?
+  paid_at         DateTime?
+  started_at      DateTime?
+  completed_at    DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  owner       User            @relation("OwnerOrders", fields: [owner_id], references: [id], onDelete: Cascade)
+  sitter      User            @relation("SitterOrders", fields: [sitter_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  address     Address?        @relation(fields: [address_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  services    OrderService[]
+  pets        OrderPet[]
+  timeline    OrderTimeline[]
+  payment     Payment?
+  review      Review?
+  conversation Conversation?
+  session     ServiceSession?
+
+  @@index([owner_id])
+  @@index([sitter_id])
+  @@index([order_no])
+  @@map("orders")
+}
+
+model OrderService {
+  id         String @id @default(uuid())
+  order_id   String
+  service_id String?
+  name       String
+  price      Float
+  duration   Int
+
+  order   Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [service_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("order_services")
+}
+
+model OrderPet {
+  id       String @id @default(uuid())
+  order_id String
+  pet_id   String
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  pet   Pet   @relation(fields: [pet_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("order_pets")
+}
+
+model OrderTimeline {
+  id         String   @id @default(uuid())
+  order_id   String
+  status     String
+  label      String
+  created_at DateTime @default(now())
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("order_timelines")
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  order_id       String   @unique
+  method         String   @default("wechat")
+  amount         Float
+  transaction_id String?
+  status         String   @default("pending")
+  paid_at        DateTime?
+  created_at     DateTime @default(now())
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model ServiceSession {
+  id        String   @id @default(uuid())
+  order_id  String   @unique
+  start_lat Float?
+  start_lng Float?
+  start_at  DateTime?
+  end_at    DateTime?
+
+  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("service_sessions")
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  order_id     String   @unique
+  owner_id     String
+  sitter_id    String
+  rating       Int
+  on_time      Int      @default(5)
+  attitude     Int      @default(5)
+  professional Int      @default(5)
+  text         String?
+  is_anonymous Boolean  @default(false)
+  images       String   @default("")
+  created_at   DateTime @default(now())
+
+  order  Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  owner  User  @relation("ReviewOwner", fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sitter User  @relation("ReviewSitter", fields: [sitter_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([sitter_id])
+  @@index([created_at])
+  @@map("reviews")
+}
+
+model Conversation {
+  id         String   @id @default(uuid())
+  order_id   String   @unique
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  order        Order                        @relation(fields: [order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id              String       @id @default(uuid())
+  conversation_id String
+  user_id         String
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([conversation_id, user_id])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  conversation_id String
+  sender_id       String
+  type            String   @default("text")
+  content         String
+  images          String   @default("")
+  read            Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [sender_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([conversation_id])
+  @@index([created_at])
+  @@map("messages")
+}
+
+model Transaction {
+  id         String   @id @default(uuid())
+  sitter_id  String
+  order_id   String?
+  type       String   @default("income")
+  amount     Float
+  commission Float    @default(0)
+  payout     Float?
+  rate       Float?
+  settled    Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  sitter User @relation(fields: [sitter_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([sitter_id])
+  @@index([created_at])
+  @@map("transactions")
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  owner_id   String
+  sitter_id  String
+  created_at DateTime @default(now())
+
+  owner User @relation("FavoriteOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  sitter User @relation("FavoriteSitter", fields: [sitter_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([owner_id, sitter_id])
+  @@map("favorites")
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  user_id    String
+  type       String
+  title      String
+  content    String?
+  read       Boolean  @default(false)
+  link       String?
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+  @@index([read])
+  @@map("notifications")
+}
+
+model UserNotificationSettings {
+  id            String  @id @default(uuid())
+  user_id       String  @unique
+  new_order     Boolean @default(true)
+  status_change Boolean @default(true)
+  system        Boolean @default(true)
+  income        Boolean @default(true)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_notification_settings")
+}
+
+model Banner {
+  id         String   @id @default(uuid())
+  title      String
+  image_url  String?
+  emoji      String?
+  link       String?
+  sort       Int      @default(0)
+  status     String   @default("active")
+  clicks     Int      @default(0)
+  updated_at DateTime @updatedAt
+  created_at DateTime @default(now())
+
+  @@map("banners")
+}
+
+model Announcement {
+  id         String   @id @default(uuid())
+  title      String
+  content    String?
+  status     String   @default("draft")
+  pinned     Boolean  @default(false)
+  views      Int      @default(0)
+  author     String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model Faq {
+  id        String @id @default(uuid())
+  question  String
+  answer    String?
+  category  String?
+  sort      Int    @default(0)
+  status    String @default("published")
+
+  @@map("faqs")
+}
+
+model SystemConfig {
+  id                String  @id @default(uuid())
+  commission_rate   Float   @default(15)
+  cancel_free_hours Int     @default(24)
+  accept_timeout    Int     @default(15)
+  max_distance      Int     @default(10)
+  min_payout        Float   @default(50)
+  service_radius    Float   @default(0.5)
+  auto_confirm      Boolean @default(true)
+  sms_notify        Boolean @default(true)
+  new_sitter_open   Boolean @default(true)
+
+  @@map("system_config")
+}
+
+model AdminUser {
+  id         String   @id @default(uuid())
+  user_id    String   @unique
+  role       String   @default("admin")
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("admin_users")
+}

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, ClipboardList, Briefcase, Wallet, User, ChevronLeft, Bell, Settings as SettingsIcon, LogOut } from 'lucide-react'
+import { api } from '../../utils/api'
+
+const levels: Record<number, string> = { 1: '初级服务者', 2: '银牌服务者', 3: '金牌服务者' }
 
 const tabs = [
   { key: 'dashboard', label: '仪表盘', icon: LayoutDashboard, path: '/sitter/dashboard' },
@@ -14,8 +17,10 @@ export default function SitterLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [currentTime, setCurrentTime] = useState('')
+  const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
+    api.get<any>('/auth/me').then(setUser).catch(() => {})
     const tick = () => {
       const now = new Date()
       setCurrentTime(`${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`)
@@ -35,10 +40,10 @@ export default function SitterLayout() {
             <ChevronLeft size={20} />
           </button>
           <div className="sl-top-user">
-            <span className="sl-top-avatar" style={{ background: '#FFF0EB' }}>👩</span>
+            <span className="sl-top-avatar" style={{ background: '#FFF0EB' }}>{user?.avatar || '👩'}</span>
             <div>
-              <span className="sl-top-name">张阿姨</span>
-              <span className="sl-top-level">金牌服务者</span>
+              <span className="sl-top-name">{user?.name || '加载中...'}</span>
+              <span className="sl-top-level">{user?.sitter_profile?.level ? levels[user.sitter_profile.level] || `Lv.${user.sitter_profile.level}` : ''}</span>
             </div>
           </div>
           <div className="sl-top-time">{currentTime}</div>

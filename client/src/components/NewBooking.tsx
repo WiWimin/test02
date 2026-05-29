@@ -4,27 +4,14 @@ import {
   ArrowLeft, Check, MapPin, Plus, ChevronDown,
   CreditCard, ShieldCheck, Clock, Home, Building, ChevronRight
 } from 'lucide-react'
+import { api } from '../utils/api'
 import { isLoggedIn } from '../utils/auth'
-
-/* ── Mock Data ── */
-
-const mockPets = [
-  { id: 'pet-1', name: '豆豆', type: '🐕', breed: '金毛', age: '3岁', weight: '28kg', note: '有点怕生，请温柔对待' },
-  { id: 'pet-2', name: '咪咪', type: '🐈', breed: '英短', age: '2岁', weight: '4kg', note: '无特殊备注' },
-]
-
-const mockAddresses = [
-  { id: 'addr-1', label: '家', icon: Home, detail: '北京市朝阳区望京SOHO T3 1808', isDefault: true },
-  { id: 'addr-2', label: '公司', icon: Building, detail: '北京市海淀区中关村软件园A座 1206', isDefault: false },
-]
 
 const steps = [
   { num: 1, label: '选择宠物' },
   { num: 2, label: '服务地址' },
   { num: 3, label: '确认下单' },
 ]
-
-/* ── Component ── */
 
 export default function NewBooking() {
   const location = useLocation()
@@ -41,6 +28,11 @@ export default function NewBooking() {
 
   const [showSuccess, setShowSuccess] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [pets, setPets] = useState<any[]>([])
+  const [addresses, setAddresses] = useState<any[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -49,15 +41,34 @@ export default function NewBooking() {
     }
     if (!orderData.sitterName) {
       navigate('/', { replace: true })
+      return
     }
+    const fetchData = async () => {
+      try {
+        const [petsData, addrData] = await Promise.all([
+          api.get<any[]>('/pets'),
+          api.get<any[]>('/addresses'),
+        ])
+        setPets(petsData || [])
+        setAddresses(addrData || [])
+        const defaultAddr = (addrData || []).find((a: any) => a.is_default)
+        if (defaultAddr) setSelectedAddress(defaultAddr.id)
+      } catch (err) {
+        console.error('Failed to load pets/addresses:', err)
+      } finally {
+        setDataLoading(false)
+      }
+    }
+    fetchData()
   }, [])
 
   const [currentStep, setCurrentStep] = useState(0)
   const [selectedPets, setSelectedPets] = useState<string[]>([])
-  const [selectedAddress, setSelectedAddress] = useState<string | null>(
-    mockAddresses.find(a => a.isDefault)?.id || null
-  )
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
+
+  const addrIcons: Record<string, any> = { home: Home, company: Building, other: Home }
+  const getAddrIcon = (tag: string) => addrIcons[tag] || Home
 
   const canNext = () => {
     if (currentStep === 0) return selectedPets.length > 0
@@ -69,13 +80,28 @@ export default function NewBooking() {
     if (currentStep < steps.length - 1 && canNext()) setCurrentStep(s => s + 1)
   }
 
-  const handleSubmit = () => {
-    setShowSuccess(true)
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await api.post('/orders', {
+        sitter_id: orderData.sitterId,
+        pet_ids: selectedPets,
+        address_id: selectedAddress,
+        service_ids: orderData.selectedServices?.map((s: any) => s.id) || [],
+        service_date: orderData.selectedDate || '',
+        service_time: orderData.selectedTime || '',
+        note: notes,
+      })
+      setShowSuccess(true)
+    } catch (err: any) {
+      setSubmitError(err.message || '提交失败，请重试')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const hasSitter = orderData.sitterName
-
-  /* ── Steps Content ── */
 
   const renderStep = () => {
     switch (currentStep) {
@@ -83,7 +109,7 @@ export default function NewBooking() {
         <div className="nb-step-content">
           <p className="nb-step-desc">选择本次需要服务的毛孩子（可多选）</p>
           <div className="nb-pet-list">
-            {mockPets.map(pet => {
+            {dataLoading ? <p style={{color:'var(--color-text-muted)',padding:20}}>加载中...</p> : pets.length === 0 ? <p style={{color:'var(--color-text-muted)',padding:20}}>请先在"我的宠物"中添加宠物</p> : pets.map((pet: any) => {
               const selected = selectedPets.includes(pet.id)
               return (
                 <button
@@ -96,11 +122,11 @@ export default function NewBooking() {
                   <div className={`nb-pc-check ${selected ? 'checked' : ''}`}>
                     {selected && <Check size={13} />}
                   </div>
-                  <span className="nb-pc-emoji">{pet.type}</span>
+                  <span className="nb-pc-emoji">{pet.avatar || '🐾'}</span>
                   <div className="nb-pc-info">
                     <span className="nb-pc-name">{pet.name}</span>
-                    <span className="nb-pc-breed">{pet.breed} · {pet.age} · {pet.weight}</span>
-                    <span className="nb-pc-note">{pet.note}</span>
+                    <span className="nb-pc-breed">{pet.breed || ''}{pet.age ? ` · ${pet.age}` : ''}{pet.weight ? ` · ${pet.weight}` : ''}</span>
+                    {pet.note && <span className="nb-pc-note">{pet.note}</span>}
                   </div>
                 </button>
               )
@@ -113,9 +139,9 @@ export default function NewBooking() {
         <div className="nb-step-content">
           <p className="nb-step-desc">选择服务地址</p>
           <div className="nb-addr-list">
-            {mockAddresses.map(addr => {
+            {dataLoading ? <p style={{color:'var(--color-text-muted)',padding:20}}>加载中...</p> : addresses.length === 0 ? <p style={{color:'var(--color-text-muted)',padding:20}}>请先在"我的地址"中添加地址</p> : addresses.map((addr: any) => {
               const selected = selectedAddress === addr.id
-              const Icon = addr.icon
+              const Icon = getAddrIcon(addr.tag || 'other')
               return (
                 <button
                   key={addr.id}
@@ -127,10 +153,10 @@ export default function NewBooking() {
                   </div>
                   <div className="nb-ac-body">
                     <div className="nb-ac-top">
-                      <span className="nb-ac-label">{addr.label}</span>
-                      {addr.isDefault && <span className="nb-ac-default">默认</span>}
+                      <span className="nb-ac-label">{addr.label || addr.tag || '其他'}</span>
+                      {addr.is_default && <span className="nb-ac-default">默认</span>}
                     </div>
-                    <span className="nb-ac-detail">{addr.detail}</span>
+                    <span className="nb-ac-detail">{addr.address} {addr.detail || ''}</span>
                   </div>
                   <div className={`nb-ac-radio ${selected ? 'checked' : ''}`}>
                     {selected && <div className="nb-ac-dot" />}
@@ -171,13 +197,13 @@ export default function NewBooking() {
             <div className="nb-confirm-row">
               <span className="nb-cr-label">宠物</span>
               <span className="nb-cr-value">
-                {selectedPets.map(id => mockPets.find(p => p.id === id)?.name).join('、') || '—'}
+                {selectedPets.map(id => pets.find((p: any) => p.id === id)?.name).join('、') || '—'}
               </span>
             </div>
             <div className="nb-confirm-row">
               <span className="nb-cr-label">地址</span>
               <span className="nb-cr-value">
-                {mockAddresses.find(a => a.id === selectedAddress)?.detail || '—'}
+                {(addresses as any[]).find((a: any) => a.id === selectedAddress)?.address || '—'}
               </span>
             </div>
             <div className="nb-confirm-row">
@@ -191,6 +217,7 @@ export default function NewBooking() {
               </span>
             </div>
           </div>
+          {submitError && <p className="nb-error">{submitError}</p>}
         </div>
       )
     }
@@ -232,7 +259,6 @@ export default function NewBooking() {
       <div className="nb-body">
         <div className="container">
           <div className="nb-layout">
-            {/* Left: Form */}
             <div className="nb-main">
               <div className="nb-card">
                 <div className="nb-card-header">
@@ -241,7 +267,6 @@ export default function NewBooking() {
                 {renderStep()}
               </div>
 
-              {/* Navigation Buttons */}
               <div className="nb-actions">
                 {currentStep > 0 ? (
                   <button className="btn btn-outline nb-btn" onClick={() => setCurrentStep(s => s - 1)}>
@@ -254,15 +279,14 @@ export default function NewBooking() {
                     下一步
                   </button>
                 ) : (
-                  <button className={`btn btn-primary nb-btn ${!canNext() ? 'disabled' : ''}`}
-                    disabled={!canNext()} onClick={handleSubmit}>
-                    提交订单
+                  <button className={`btn btn-primary nb-btn ${!canNext() || submitting ? 'disabled' : ''}`}
+                    disabled={!canNext() || submitting} onClick={handleSubmit}>
+                    {submitting ? '提交中...' : '提交订单'}
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Right: Order Summary (desktop) */}
             <div className="nb-sidebar">
               <div className={`nb-summary ${summaryOpen ? 'open' : ''}`}>
                 <div className="nb-summary-header">
@@ -298,8 +322,8 @@ export default function NewBooking() {
                     <span className="nb-ss-title">宠物</span>
                     <div className="nb-summary-tags">
                       {selectedPets.map(id => {
-                        const pet = mockPets.find(p => p.id === id)
-                        return pet ? <span key={id} className="nb-summary-tag">{pet.type} {pet.name}</span> : null
+                        const pet = (pets as any[]).find((p: any) => p.id === id)
+                        return pet ? <span key={id} className="nb-summary-tag">{pet.avatar || '🐾'} {pet.name}</span> : null
                       })}
                     </div>
                   </div>
@@ -309,7 +333,7 @@ export default function NewBooking() {
                   <div className="nb-summary-section">
                     <span className="nb-ss-title">地址</span>
                     <span className="nb-summary-text">
-                      <MapPin size={12} /> {mockAddresses.find(a => a.id === selectedAddress)?.detail}
+                      <MapPin size={12} /> {(addresses as any[]).find((a: any) => a.id === selectedAddress)?.address}
                     </span>
                   </div>
                 )}
@@ -339,7 +363,6 @@ export default function NewBooking() {
         </div>
       </div>
 
-      {/* ── Success Modal ── */}
       {showSuccess && (
         <div className="nb-modal-overlay" onClick={() => { setShowSuccess(false); navigate('/') }}>
           <div className="nb-modal" onClick={e => e.stopPropagation()}>
@@ -357,11 +380,9 @@ export default function NewBooking() {
         </div>
       )}
 
-      {/* ── Styles ── */}
       <style>{`
         .nb-page { min-height: 100vh; background: var(--color-bg); padding-top: 56px; }
 
-        /* Top Bar */
         .nb-topbar {
           position: fixed; top: 0; left: 0; right: 0; z-index: 100;
           height: 56px; background: rgba(255,255,255,0.95);
@@ -383,7 +404,6 @@ export default function NewBooking() {
         }
         .nb-summary-toggle:hover { background: var(--color-primary-light); }
 
-        /* Step Progress */
         .nb-progress-wrap {
           background: var(--color-bg-alt);
           border-bottom: 1px solid var(--color-border);
@@ -424,11 +444,9 @@ export default function NewBooking() {
         }
         .nb-ps-line.done { background: var(--color-secondary); }
 
-        /* Body Layout */
         .nb-body { padding: 24px 0 60px; }
         .nb-layout { display: grid; grid-template-columns: 1fr 340px; gap: 28px; align-items: start; }
 
-        /* Main Card */
         .nb-main { min-width: 0; }
         .nb-card {
           background: var(--color-bg-alt); border-radius: var(--radius-lg);
@@ -442,7 +460,6 @@ export default function NewBooking() {
         .nb-step-content { padding: 24px; }
         .nb-step-desc { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 20px; }
 
-        /* Pet Selection */
         .nb-pet-list { display: flex; flex-direction: column; gap: 12px; }
         .nb-pet-card {
           display: flex; align-items: center; gap: 14px;
@@ -468,7 +485,6 @@ export default function NewBooking() {
         .nb-pc-breed { font-size: 12px; color: var(--color-text-muted); }
         .nb-pc-note { font-size: 12px; color: var(--color-text-secondary); }
 
-        /* Address Selection */
         .nb-addr-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
         .nb-addr-card {
           display: flex; align-items: center; gap: 14px;
@@ -517,7 +533,6 @@ export default function NewBooking() {
           gap: 8px; color: var(--color-text-muted); font-size: 13px;
         }
 
-        /* Notes */
         .nb-notes-section { margin-bottom: 20px; }
         .nb-notes-label {
           display: block; font-size: 14px; font-weight: 600;
@@ -532,7 +547,6 @@ export default function NewBooking() {
         }
         .nb-notes-input:focus { outline: none; border-color: var(--color-primary); }
 
-        /* Confirm Card */
         .nb-confirm-card {
           background: var(--color-bg); border-radius: var(--radius-md);
           padding: 20px; border: 1px solid var(--color-border);
@@ -549,13 +563,15 @@ export default function NewBooking() {
           display: flex; align-items: center; gap: 6px;
         }
 
-        /* Navigation Actions */
+        .nb-error {
+          color: var(--color-error); font-size: 13px; margin-top: 12px; text-align: center;
+        }
+
         .nb-actions {
           display: flex; justify-content: space-between; margin-top: 20px; gap: 12px;
         }
         .nb-btn { min-width: 120px; justify-content: center; }
 
-        /* Sidebar */
         .nb-sidebar { position: sticky; top: 80px; }
         .nb-summary {
           background: var(--color-bg-alt); border-radius: var(--radius-lg);
@@ -603,7 +619,6 @@ export default function NewBooking() {
           background: var(--color-secondary-light); border-radius: var(--radius-sm);
         }
 
-        /* Success Modal */
         .nb-modal-overlay {
           position: fixed; inset: 0; z-index: 2000;
           background: rgba(0,0,0,0.4);
@@ -622,7 +637,6 @@ export default function NewBooking() {
         .nb-modal-actions { display: flex; gap: 12px; justify-content: center; }
         .nb-modal-actions .btn { min-width: 120px; justify-content: center; }
 
-        /* Responsive */
         @media (max-width: 900px) {
           .nb-layout { grid-template-columns: 1fr; }
           .nb-sidebar {

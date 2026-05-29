@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MapPin, Phone, Plus, Edit3, Trash2, ChevronLeft, Star, Home, Briefcase } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { api } from '../../utils/api'
 
 interface Address {
   id: number
@@ -14,11 +15,6 @@ interface Address {
   lng?: number
 }
 
-const mockAddresses: Address[] = [
-  { id: 1, name: '张三', phone: '138****5678', tag: 'home', address: '北京市朝阳区望京街道', detail: '融泽嘉园12号院3号楼1单元1808', isDefault: true, lat: 39.9042, lng: 116.4074 },
-  { id: 2, name: '张三', phone: '138****5678', tag: 'company', address: '北京市海淀区中关村大街', detail: '银谷大厦 15F 1506', isDefault: false, lat: 39.9042, lng: 116.4074 },
-]
-
 const tagConfig = {
   home: { label: '家', icon: Home, color: '#FF7D5A', bg: '#FFF0EB' },
   company: { label: '公司', icon: Briefcase, color: '#45B7A0', bg: '#E8F8F4' },
@@ -31,11 +27,36 @@ const emptyForm: Omit<Address, 'id'> = {
 
 export default function OwnerAddresses() {
   const navigate = useNavigate()
-  const [addresses, setAddresses] = useState<Address[]>(mockAddresses)
+  const [addresses, setAddresses] = useState<Address[]>([])
+  const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<Omit<Address, 'id'>>({ ...emptyForm })
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  const fetchAddresses = async () => {
+    try {
+      const data = await api.get<any[]>('/addresses')
+      setAddresses((data || []).map((a: any) => ({
+        id: a.id,
+        name: a.name || '',
+        phone: a.phone || '',
+        tag: a.tag || 'other',
+        address: a.address || '',
+        detail: a.detail || '',
+        isDefault: a.is_default || false,
+        lat: a.lat,
+        lng: a.lng,
+      })))
+    } catch (err) {
+      console.error('Failed to load addresses:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchAddresses() }, [])
 
   const openAdd = () => {
     setEditingId(null)
@@ -51,8 +72,13 @@ export default function OwnerAddresses() {
     setShowModal(true)
   }
 
-  const handleDelete = (id: number) => {
-    setAddresses(prev => prev.filter(a => a.id !== id))
+  const handleDelete = async (id: number) => {
+    try {
+      await api.delete(`/addresses/${id}`)
+      setAddresses(prev => prev.filter(a => a.id !== id))
+    } catch (err: any) {
+      alert(err.message || '删除失败')
+    }
   }
 
   const validate = () => {
@@ -65,19 +91,43 @@ export default function OwnerAddresses() {
     return Object.keys(errs).length === 0
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return
-    if (editingId) {
-      setAddresses(prev => prev.map(a => a.id === editingId ? { ...a, ...form } : form.isDefault ? { ...a, isDefault: false } : a))
-    } else {
-      const newId = Math.max(0, ...addresses.map(a => a.id)) + 1
-      setAddresses(prev => [...prev.map(a => form.isDefault ? { ...a, isDefault: false } : a), { id: newId, ...form }])
+    setSaving(true)
+    try {
+      const body = {
+        name: form.name,
+        phone: form.phone,
+        tag: form.tag,
+        address: form.address,
+        detail: form.detail,
+        is_default: form.isDefault,
+      }
+      if (editingId) {
+        await api.put(`/addresses/${editingId}`, body)
+      } else {
+        await api.post('/addresses', body)
+      }
+      setShowModal(false)
+      await fetchAddresses()
+    } catch (err: any) {
+      alert(err.message || '保存失败')
+    } finally {
+      setSaving(false)
     }
-    setShowModal(false)
   }
 
-  const setDefault = (id: number) => {
-    setAddresses(prev => prev.map(a => ({ ...a, isDefault: a.id === id })))
+  const setDefault = async (id: number) => {
+    try {
+      await api.put(`/addresses/${id}/default`, {})
+      await fetchAddresses()
+    } catch (err: any) {
+      alert(err.message || '操作失败')
+    }
+  }
+
+  if (loading) {
+    return <div className="oa-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
   }
 
   return (
@@ -183,7 +233,7 @@ export default function OwnerAddresses() {
 
             <div className="oa-modal-actions">
               <button className="oa-cancel" onClick={() => setShowModal(false)}>取消</button>
-              <button className="oa-save" onClick={handleSave}>保存</button>
+              <button className="oa-save" onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</button>
             </div>
           </div>
         </div>

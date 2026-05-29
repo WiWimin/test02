@@ -1,18 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Eye, AlertCircle, X, RefreshCw, CheckCircle, XCircle, Clock, FileText, MessageCircle } from 'lucide-react'
-
-const mockOrders = [
-  { id: 'ORD-20260528-001', user: '王女士', sitter: '张阿姨', service: '遛狗60min', amount: 79, status: 'completed', time: '2026-05-28 10:32', issue: null, payment: '微信支付', address: '朝阳区望京SOHO T1-1203' },
-  { id: 'ORD-20260528-002', user: '李先生', sitter: '李明', service: '上门喂猫', amount: 39, status: 'in_progress', time: '2026-05-28 10:15', issue: null, payment: '支付宝', address: '海淀区中关村大街1号' },
-  { id: 'ORD-20260528-003', user: '刘先生', sitter: '小王', service: '宠物清洁', amount: 69, status: 'pending', time: '2026-05-28 09:58', issue: null, payment: '微信支付', address: '西城区金融街15号' },
-  { id: 'ORD-20260528-004', user: '赵女士', sitter: '张阿姨', service: '遛狗30min', amount: 49, status: 'completed', time: '2026-05-28 09:30', issue: null, payment: '余额支付', address: '东城区王府井大街88号' },
-  { id: 'ORD-20260528-005', user: '陈先生', sitter: '赵师傅', service: '遛狗60min', amount: 79, status: 'completed', time: '2026-05-28 09:12', issue: null, payment: '微信支付', address: '朝阳区三里屯路19号' },
-  { id: 'ORD-20260527-006', user: '王女士', sitter: '张阿姨', service: '上门喂猫', amount: 39, status: 'refunding', time: '2026-05-27 14:20', issue: '退款申请 - 服务时间未到，用户取消', payment: '微信支付', address: '朝阳区望京SOHO T1-1203' },
-  { id: 'ORD-20260527-007', user: '李先生', sitter: '小王', service: '遛狗60min', amount: 79, status: 'disputed', time: '2026-05-27 11:00', issue: '纠纷投诉 - 服务时长不足', payment: '支付宝', address: '海淀区五道口' },
-  { id: 'ORD-20260526-008', user: '刘先生', sitter: '李明', service: '宠物清洁', amount: 69, status: 'cancelled', time: '2026-05-26 16:45', issue: null, payment: '微信支付', address: '西城区金融街15号' },
-  { id: 'ORD-20260525-009', user: '赵女士', sitter: '赵师傅', service: '遛狗60min', amount: 79, status: 'completed', time: '2026-05-25 10:00', issue: null, payment: '余额支付', address: '东城区安定门内大街' },
-  { id: 'ORD-20260524-010', user: '陈先生', sitter: '小王', service: '宠物清洁', amount: 69, status: 'completed', time: '2026-05-24 14:30', issue: null, payment: '微信支付', address: '朝阳区三里屯路19号' },
-]
+import { api } from '../../utils/api'
 
 const statusMap: Record<string, { label: string; color: string; bg: string; icon: any }> = {
   completed: { label: '已完成', color: '#2D9B7A', bg: 'linear-gradient(135deg, #E8F8F4, #D4F5EC)', icon: CheckCircle },
@@ -23,7 +11,7 @@ const statusMap: Record<string, { label: string; color: string; bg: string; icon
   cancelled: { label: '已取消', color: '#8E8EA0', bg: 'linear-gradient(135deg, #F5F5F7, #EEEFF2)', icon: XCircle },
 }
 
-function OrderDetailModal({ order, onClose }: { order: typeof mockOrders[0]; onClose: () => void }) {
+function OrderDetailModal({ order, onClose }: { order: any; onClose: () => void }) {
   const st = statusMap[order.status]
   const Icon = st.icon
   return (
@@ -62,7 +50,7 @@ function OrderDetailModal({ order, onClose }: { order: typeof mockOrders[0]; onC
           </div>
           <div className="om-actions">
             {(order.status === 'refunding' || order.status === 'disputed') && (
-              <button className="om-btn om-btn-primary" onClick={() => alert('已处理')}>处理 {order.status === 'refunding' ? '退款' : '纠纷'}</button>
+              <button className="om-btn om-btn-primary" onClick={async () => { await api.put('/admin/orders/' + order.id + '/' + (order.status === 'refunding' ? 'refund' : 'resolve')); onClose() }}>处理 {order.status === 'refunding' ? '退款' : '纠纷'}</button>
             )}
             <button className="om-btn om-btn-outline"><MessageCircle size={14} /> 联系用户</button>
             <button className="om-btn om-btn-outline"><FileText size={14} /> 查看日志</button>
@@ -74,20 +62,22 @@ function OrderDetailModal({ order, onClose }: { order: typeof mockOrders[0]; onC
 }
 
 export default function OrderManagement() {
+  const [orders, setOrders] = useState<any[]>([])
+  useEffect(() => { api.get<any[]>('/admin/orders').then(setOrders) }, [])
   const [search, setSearch] = useState('')
   const [statusTab, setStatusTab] = useState('all')
-  const [selected, setSelected] = useState<typeof mockOrders[0] | null>(null)
+  const [selected, setSelected] = useState<any | null>(null)
   const [page, setPage] = useState(1)
 
   const tabs = [
-    { key: 'all', label: '全部', count: mockOrders.length },
-    { key: 'pending', label: '待接单', count: mockOrders.filter(o => o.status === 'pending').length },
-    { key: 'in_progress', label: '服务中', count: mockOrders.filter(o => o.status === 'in_progress').length },
-    { key: 'completed', label: '已完成', count: mockOrders.filter(o => o.status === 'completed').length },
-    { key: 'refunding', label: '退款/纠纷', count: mockOrders.filter(o => o.status === 'refunding' || o.status === 'disputed').length },
+    { key: 'all', label: '全部', count: orders.length },
+    { key: 'pending', label: '待接单', count: orders.filter(o => o.status === 'pending').length },
+    { key: 'in_progress', label: '服务中', count: orders.filter(o => o.status === 'in_progress').length },
+    { key: 'completed', label: '已完成', count: orders.filter(o => o.status === 'completed').length },
+    { key: 'refunding', label: '退款/纠纷', count: orders.filter(o => o.status === 'refunding' || o.status === 'disputed').length },
   ]
 
-  const filtered = mockOrders.filter(o => {
+  const filtered = orders.filter(o => {
     if (statusTab === 'refunding' && o.status !== 'refunding' && o.status !== 'disputed') return false
     if (statusTab !== 'all' && statusTab !== 'refunding' && o.status !== statusTab) return false
     if (search && !o.id.includes(search) && !o.user.includes(search) && !o.sitter.includes(search)) return false
@@ -97,12 +87,12 @@ export default function OrderManagement() {
   const perPage = 6
   const totalPages = Math.ceil(filtered.length / perPage)
   const paged = filtered.slice((page - 1) * perPage, page * perPage)
-  const issueCount = mockOrders.filter(o => o.status === 'refunding' || o.status === 'disputed').length
+  const issueCount = orders.filter(o => o.status === 'refunding' || o.status === 'disputed').length
 
   return (
     <div className="om-page">
       <div className="om-page-hdr">
-        <div><h1>订单管理</h1><p className="om-subtitle">共 {mockOrders.length} 条订单 · {issueCount > 0 ? <span className="om-issue-badge">{issueCount} 条需处理</span> : '全部正常'}</p></div>
+        <div><h1>订单管理</h1><p className="om-subtitle">共 {orders.length} 条订单 · {issueCount > 0 ? <span className="om-issue-badge">{issueCount} 条需处理</span> : '全部正常'}</p></div>
       </div>
 
       <div className="om-tabs">
@@ -116,7 +106,7 @@ export default function OrderManagement() {
 
       <div className="om-toolbar">
         <div className="om-search"><Search size={16} /><input placeholder="搜索订单号、用户名或服务者..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} /></div>
-        <button className="om-refresh-btn" onClick={() => alert('已刷新')}><RefreshCw size={15} /> 刷新</button>
+        <button className="om-refresh-btn" onClick={() => api.get<any[]>('/admin/orders').then(setOrders)}><RefreshCw size={15} /> 刷新</button>
       </div>
 
       <div className="om-table-card">

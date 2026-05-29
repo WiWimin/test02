@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Phone, MapPin, Shield, ChevronRight, Bell, Lock,
   HelpCircle, FileText, LogOut, Camera, CheckCircle2, X,
   AlertCircle
 } from 'lucide-react'
+import { api } from '../../utils/api'
 import { getCurrentUser, logout } from '../../utils/auth'
 
 const menuGroups = [
@@ -29,8 +30,29 @@ const menuGroups = [
 export default function OwnerProfile() {
   const navigate = useNavigate()
   const user = getCurrentUser()
+  const [profile, setProfile] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [showLogout, setShowLogout] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [pwForm, setPwForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const data = await api.get<any>('/auth/me')
+        setProfile(data)
+        setEditName(data.name || '')
+      } catch (err) {
+        console.error('Failed to load profile:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProfile()
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -38,9 +60,50 @@ export default function OwnerProfile() {
     setTimeout(() => navigate('/'), 1000)
   }
 
+  const handleSaveProfile = async () => {
+    try {
+      const data = await api.put<any>('/auth/profile', { name: editName })
+      setProfile((prev: any) => ({ ...prev, name: data.name }))
+      setShowEdit(false)
+      setToast({ msg: '修改成功', type: 'success' })
+    } catch (err: any) {
+      setToast({ msg: err.message || '修改失败', type: 'error' })
+    }
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  const handleChangePassword = async () => {
+    if (pwForm.newPassword !== pwForm.confirmPassword) {
+      setToast({ msg: '两次密码不一致', type: 'error' })
+      setTimeout(() => setToast(null), 2500)
+      return
+    }
+    if (pwForm.newPassword.length < 6) {
+      setToast({ msg: '新密码至少6位', type: 'error' })
+      setTimeout(() => setToast(null), 2500)
+      return
+    }
+    try {
+      await api.put('/auth/password', { oldPassword: pwForm.oldPassword, newPassword: pwForm.newPassword })
+      setShowPassword(false)
+      setPwForm({ oldPassword: '', newPassword: '', confirmPassword: '' })
+      setToast({ msg: '密码修改成功', type: 'success' })
+    } catch (err: any) {
+      setToast({ msg: err.message || '密码修改失败', type: 'error' })
+    }
+    setTimeout(() => setToast(null), 2500)
+  }
+
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2500)
+  }
+
+  const displayName = profile?.name || user?.name || '用户'
+  const displayPhone = profile?.phone || user?.phone || ''
+
+  if (loading) {
+    return <div className="opro-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
   }
 
   return (
@@ -48,13 +111,13 @@ export default function OwnerProfile() {
       {/* Profile Header */}
       <div className="opro-header">
         <div className="opro-avatar-wrap">
-          <div className="opro-avatar">{user?.name?.charAt(0) || 'U'}</div>
-          <button className="opro-camera" onClick={() => showToast('头像功能开发中', 'success')}>
+          <div className="opro-avatar">{displayName?.charAt(0) || 'U'}</div>
+          <button className="opro-camera" onClick={() => setShowEdit(true)}>
             <Camera size={14} />
           </button>
         </div>
-        <h2 className="opro-name">{user?.name || '用户'}</h2>
-        <p className="opro-phone">{user?.phone ? user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机'}</p>
+        <h2 className="opro-name">{displayName}</h2>
+        <p className="opro-phone">{displayPhone ? displayPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : '未绑定手机'}</p>
         <div className="opro-badge">宠物主人</div>
       </div>
 
@@ -86,7 +149,12 @@ export default function OwnerProfile() {
             {group.items.map(item => {
               const Icon = item.icon
               return (
-                <button key={item.label} className="opro-menu-item" onClick={() => item.path !== '#' ? navigate(item.path) : showToast('功能开发中', 'success')}>
+                <button key={item.label} className="opro-menu-item"
+                  onClick={() => {
+                    if (item.path !== '#') navigate(item.path)
+                    else if (item.label === '账号安全') setShowPassword(true)
+                    else showToast('功能开发中', 'success')
+                  }}>
                   <div className="opro-mi-icon"><Icon size={18} /></div>
                   <div className="opro-mi-info">
                     <span className="opro-mi-label">{item.label}</span>
@@ -115,6 +183,54 @@ export default function OwnerProfile() {
             <div className="opro-confirm-btns">
               <button className="opro-btn-cancel" onClick={() => setShowLogout(false)}>取消</button>
               <button className="opro-btn-confirm" onClick={handleLogout}>确认退出</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {showEdit && (
+        <div className="opro-overlay" onClick={() => setShowEdit(false)}>
+          <div className="opro-confirm" onClick={e => e.stopPropagation()} style={{ textAlign: 'left' }}>
+            <h3>编辑资料</h3>
+            <div style={{ margin: '16px 0' }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>昵称</label>
+              <input value={editName} onChange={e => setEditName(e.target.value)}
+                style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div className="opro-confirm-btns">
+              <button className="opro-btn-cancel" onClick={() => setShowEdit(false)}>取消</button>
+              <button className="opro-btn-confirm" style={{ background: 'var(--color-primary)' }} onClick={handleSaveProfile}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPassword && (
+        <div className="opro-overlay" onClick={() => setShowPassword(false)}>
+          <div className="opro-confirm" onClick={e => e.stopPropagation()} style={{ textAlign: 'left', maxWidth: 360 }}>
+            <h3>修改密码</h3>
+            <div style={{ margin: '16px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>原密码</label>
+                <input type="password" value={pwForm.oldPassword} onChange={e => setPwForm(p => ({ ...p, oldPassword: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>新密码</label>
+                <input type="password" value={pwForm.newPassword} onChange={e => setPwForm(p => ({ ...p, newPassword: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 6 }}>确认新密码</label>
+                <input type="password" value={pwForm.confirmPassword} onChange={e => setPwForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: '1.5px solid var(--color-border)', borderRadius: 'var(--radius-md)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <div className="opro-confirm-btns">
+              <button className="opro-btn-cancel" onClick={() => setShowPassword(false)}>取消</button>
+              <button className="opro-btn-confirm" style={{ background: 'var(--color-primary)' }} onClick={handleChangePassword}>确认修改</button>
             </div>
           </div>
         </div>

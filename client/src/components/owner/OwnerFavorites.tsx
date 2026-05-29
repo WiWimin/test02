@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Star, ShieldCheck, MapPin, Clock, Heart, Search, X, ChevronRight } from 'lucide-react'
+import { api } from '../../utils/api'
 
 interface FavSitter {
   id: number
@@ -15,24 +16,57 @@ interface FavSitter {
   serviceCount: number
 }
 
-const mockFavorites: FavSitter[] = [
-  { id: 1, name: '张阿姨', avatar: '👩', level: '金牌服务者', score: 4.9, orders: 328, tags: ['经验丰富', '耐心细致', '好评如潮'], price: 88, distance: '1.2km', serviceCount: 5 },
-  { id: 2, name: '李阿姨', avatar: '👩', level: '银牌服务者', score: 4.8, orders: 215, tags: ['喜欢小动物', '时间灵活'], price: 49, distance: '2.5km', serviceCount: 3 },
-  { id: 3, name: '小王', avatar: '🧑', level: '铜牌服务者', score: 4.7, orders: 156, tags: ['年轻有活力', '大型犬经验'], price: 69, distance: '0.8km', serviceCount: 4 },
-  { id: 4, name: '赵阿姨', avatar: '👩', level: '金牌服务者', score: 4.9, orders: 412, tags: ['宠物医生背景', '营养配餐'], price: 128, distance: '3.1km', serviceCount: 6 },
-]
+const levelLabels: Record<number, string> = {
+  1: '金牌服务者',
+  2: '银牌服务者',
+  3: '铜牌服务者',
+}
 
 export default function OwnerFavorites() {
   const navigate = useNavigate()
-  const [favorites, setFavorites] = useState<FavSitter[]>(mockFavorites)
+  const [favorites, setFavorites] = useState<FavSitter[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+
+  const fetchFavorites = async () => {
+    try {
+      const data = await api.get<any[]>('/sitters/favorites')
+      setFavorites((data || []).map((f: any) => ({
+        id: f.id,
+        name: f.name || '',
+        avatar: f.avatar || '👩',
+        level: levelLabels[f.level] || `Lv.${f.level}`,
+        score: f.score || 0,
+        orders: f.orders || 0,
+        tags: f.tags || [],
+        price: f.price || 0,
+        distance: '',
+        serviceCount: (f.tags || []).length,
+      })))
+    } catch (err) {
+      console.error('Failed to load favorites:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchFavorites() }, [])
 
   const filtered = favorites.filter(f =>
     f.name.includes(search) || f.tags.some(t => t.includes(search))
   )
 
-  const toggleFav = (id: number) => {
-    setFavorites(prev => prev.filter(f => f.id !== id))
+  const toggleFav = async (id: number) => {
+    try {
+      await api.post(`/sitters/${id}/favorite`, {})
+      setFavorites(prev => prev.filter(f => f.id !== id))
+    } catch (err: any) {
+      console.error('Failed to toggle favorite:', err)
+    }
+  }
+
+  if (loading) {
+    return <div className="of-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
   }
 
   return (
@@ -53,7 +87,7 @@ export default function OwnerFavorites() {
         <div className="of-empty">
           <Heart size={48} />
           <p>{search ? '没有找到匹配的服务者' : '还没有收藏任何服务者'}</p>
-          {!search && <button className="of-browse-btn" onClick={() => navigate('/')}>去浏览服务</button>}
+          {!search && <button className="of-browse-btn" onClick={() => navigate('/home/owner/market')}>去浏览服务</button>}
         </div>
       ) : (
         <div className="of-list">

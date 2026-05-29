@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { Dog, Cat, Bath, Stethoscope, Utensils, ChevronRight } from 'lucide-react'
+import { isLoggedIn } from '../utils/auth'
 
 const services = [
-  { icon: Dog, label: '遛狗', id: 'dog-walk', desc: '小区或公园遛狗，含排泄清理', color: '#FF7D5A', gradient: 'linear-gradient(135deg, #FF7D5A, #FF6B3D)' },
-  { icon: Cat, label: '上门喂猫', id: 'cat-feeding', desc: '喂食、换水、清理猫砂盆', color: '#45B7A0', gradient: 'linear-gradient(135deg, #45B7A0, #3A9E89)' },
-  { icon: Bath, label: '宠物清洁', id: 'pet-bath', desc: '洗澡、梳毛、指甲修剪', color: '#4A90D9', gradient: 'linear-gradient(135deg, #4A90D9, #3A7BC8)' },
-  { icon: Stethoscope, label: '医疗陪护', id: 'vet-care', desc: '宠物医院陪同、术后护理', color: '#9B59B6', gradient: 'linear-gradient(135deg, #9B59B6, #8E44AD)' },
-  { icon: Utensils, label: '上门喂食', id: 'pet-feeding', desc: '定时喂食、换水、简单陪伴', color: '#E67E22', gradient: 'linear-gradient(135deg, #E67E22, #D35400)' },
+  { icon: Dog, label: '遛狗', id: 'dog-walk', desc: '小区或公园遛狗，含排泄清理', color: '#FF7D5A', gradient: 'linear-gradient(135deg, #FF7D5A, #FF6B3D)', category: 'walk' },
+  { icon: Cat, label: '上门喂猫', id: 'cat-feeding', desc: '喂食、换水、清理猫砂盆', color: '#45B7A0', gradient: 'linear-gradient(135deg, #45B7A0, #3A9E89)', category: 'feed' },
+  { icon: Bath, label: '宠物清洁', id: 'pet-bath', desc: '洗澡、梳毛、指甲修剪', color: '#4A90D9', gradient: 'linear-gradient(135deg, #4A90D9, #3A7BC8)', category: 'clean' },
+  { icon: Stethoscope, label: '医疗陪护', id: 'vet-care', desc: '宠物医院陪同、术后护理', color: '#9B59B6', gradient: 'linear-gradient(135deg, #9B59B6, #8E44AD)', category: 'medical' },
+  { icon: Utensils, label: '上门喂食', id: 'pet-feeding', desc: '定时喂食、换水、简单陪伴', color: '#E67E22', gradient: 'linear-gradient(135deg, #E67E22, #D35400)', category: 'feed' },
 ]
 
 export default function ServiceCategories() {
+  const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(false)
   const ref = useRef<HTMLElement>(null)
+
+  const handleClick = (svc: typeof services[0]) => {
+    if (isLoggedIn()) {
+      navigate(`/home/owner/market?category=${svc.label}`)
+    } else {
+      navigate(`/login?redirect=/home/owner/market?category=${encodeURIComponent(svc.label)}`)
+    }
+  }
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -33,9 +43,9 @@ export default function ServiceCategories() {
         </div>
         <div className="services-grid">
           {services.map((svc, i) => (
-            <Link
+            <button
               key={svc.label}
-              to={`/services/${svc.id}`}
+              onClick={() => handleClick(svc)}
               className={`service-card ${isVisible ? 'visible' : ''}`}
               style={{ '--delay': `${i * 0.1}s`, '--card-color': svc.color } as React.CSSProperties}
             >
@@ -47,7 +57,7 @@ export default function ServiceCategories() {
               <span className="sc-link">
                 查看详情 <ChevronRight size={14} />
               </span>
-            </Link>
+            </button>
           ))}
         </div>
       </div>

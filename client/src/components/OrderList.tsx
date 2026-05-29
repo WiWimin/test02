@@ -5,53 +5,17 @@ import {
   MessageCircle, XCircle, Star, RotateCcw, Trash2,
   AlertCircle, CreditCard, ChevronDown
 } from 'lucide-react'
+import { api } from '../utils/api'
 
-/* ── Mock Orders ── */
-
-const mockOrders = [
-  {
-    id: 'ORD-20260528-001', status: 'pending_pay', petName: '豆豆', petEmoji: '🐕',
-    serviceName: '遛狗 60分钟', sitterName: '张阿姨', sitterAvatar: '👩',
-    date: '2026-05-28', time: '10:00-11:00', price: 79,
-    address: '望京SOHO T3 1808', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-002', status: 'pending_accept', petName: '咪咪', petEmoji: '🐈',
-    serviceName: '上门喂猫', sitterName: '李明', sitterAvatar: '👨',
-    date: '2026-05-29', time: '14:00-14:30', price: 39,
-    address: '融泽嘉园12号院3-1206', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-003', status: 'accepted', petName: '可乐', petEmoji: '🐕',
-    serviceName: '宠物清洁', sitterName: '小王', sitterAvatar: '👩',
-    date: '2026-05-30', time: '09:00-10:00', price: 69,
-    address: '华润橡树湾5-2-801', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-004', status: 'in_progress', petName: '团子', petEmoji: '🐈',
-    serviceName: '上门喂食+遛狗', sitterName: '张阿姨', sitterAvatar: '👩',
-    date: '2026-05-28', time: '16:00-17:00', price: 99,
-    address: '望京SOHO T3 1808', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-005', status: 'completed', petName: '豆豆', petEmoji: '🐕',
-    serviceName: '遛狗 30分钟', sitterName: '张阿姨', sitterAvatar: '👩',
-    date: '2026-05-26', time: '09:00-09:30', price: 49,
-    address: '望京SOHO T3 1808', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-006', status: 'completed', petName: '咪咪', petEmoji: '🐈',
-    serviceName: '上门喂猫', sitterName: '小王', sitterAvatar: '👩',
-    date: '2026-05-25', time: '18:00-18:30', price: 39,
-    address: '融泽嘉园12号院3-1206', createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'ORD-20260528-007', status: 'cancelled', petName: '可乐', petEmoji: '🐕',
-    serviceName: '遛狗 60分钟', sitterName: '李明', sitterAvatar: '👨',
-    date: '2026-05-24', time: '15:00-16:00', price: 79,
-    address: '华润橡树湾5-2-801', createdAt: new Date().toISOString(),
-  },
-]
+const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  pending_pay:   { label: '待支付', color: '#D48806', bg: '#FFFBEB' },
+  pending_accept:{ label: '待接单', color: '#3B82F6', bg: '#EFF6FF' },
+  accepted:      { label: '已接单', color: '#45B7A0', bg: '#E8F8F4' },
+  in_progress:   { label: '服务中', color: '#45B7A0', bg: '#E8F8F4' },
+  completed:     { label: '已完成', color: '#9E9EB8', bg: '#F5F5F7' },
+  reviewed:      { label: '已评价', color: '#9E9EB8', bg: '#F5F5F7' },
+  cancelled:     { label: '已取消', color: '#FF6B6B', bg: '#FFF0F0' },
+}
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -61,30 +25,32 @@ const tabs = [
   { key: 'cancelled', label: '已取消' },
 ]
 
-const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  pending_pay:   { label: '待支付', color: '#D48806', bg: '#FFFBEB' },
-  pending_accept:{ label: '待接单', color: '#3B82F6', bg: '#EFF6FF' },
-  accepted:      { label: '已接单', color: '#45B7A0', bg: '#E8F8F4' },
-  in_progress:   { label: '服务中', color: '#45B7A0', bg: '#E8F8F4' },
-  completed:     { label: '已完成', color: '#9E9EB8', bg: '#F5F5F7' },
-  cancelled:     { label: '已取消', color: '#FF6B6B', bg: '#FFF0F0' },
-}
-
-/* ── Helpers ── */
-
 function formatCountdown(ms: number) {
   const m = Math.floor(ms / 60000)
   const s = Math.floor((ms % 60000) / 1000)
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
-function filterOrders(orders: typeof mockOrders, tab: string) {
+interface OrderItem {
+  id: string
+  status: string
+  petName: string
+  petEmoji: string
+  serviceName: string
+  sitterName: string
+  sitterAvatar: string
+  date: string
+  time: string
+  price: number
+  address: string
+  createdAt: string
+}
+
+function filterOrders(orders: OrderItem[], tab: string) {
   if (tab === 'all') return orders
   if (tab === 'active') return orders.filter(o => o.status === 'accepted' || o.status === 'in_progress' || o.status === 'pending_accept')
   return orders.filter(o => o.status === tab)
 }
-
-/* ── Countdown ── */
 
 function CountdownTimer({ createdAt }: { createdAt: string }) {
   const [remaining, setRemaining] = useState(0)
@@ -111,23 +77,49 @@ function CountdownTimer({ createdAt }: { createdAt: string }) {
   )
 }
 
-/* ── Main Component ── */
-
 export default function OrderList() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
-  const [orders] = useState(mockOrders)
+  const [orders, setOrders] = useState<OrderItem[]>([])
+  const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const data = await api.get<any[]>('/orders?page=1&pageSize=50')
+        setOrders((data || []).map((o: any) => ({
+          id: o.id || '',
+          status: o.status || 'pending_pay',
+          petName: o.petName || o.pet_name || '宠物',
+          petEmoji: o.petEmoji || o.pet_emoji || '🐾',
+          serviceName: o.serviceName || o.service_name || '宠物服务',
+          sitterName: o.sitterName || o.sitter_name || '服务者',
+          sitterAvatar: o.sitterAvatar || o.sitter_avatar || '👤',
+          date: o.serviceDate || o.service_date || '',
+          time: o.serviceTime || o.service_time || '',
+          price: o.totalPrice || o.total_price || 0,
+          address: o.addressDetail || o.address_detail || o.address || '',
+          createdAt: o.createdAt || o.created_at || new Date().toISOString(),
+        })))
+      } catch (err) {
+        console.error('Failed to fetch orders:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrders()
+  }, [])
 
   const filtered = filterOrders(orders, activeTab)
   const displayed = filtered.slice(0, page * 10)
 
   const handleLoadMore = useCallback(() => {
-    if (loading || displayed.length >= filtered.length) return
-    setLoading(true)
-    setTimeout(() => { setPage(p => p + 1); setLoading(false) }, 600)
-  }, [loading, displayed.length, filtered.length])
+    if (loadingMore || displayed.length >= filtered.length) return
+    setLoadingMore(true)
+    setTimeout(() => { setPage(p => p + 1); setLoadingMore(false) }, 600)
+  }, [loadingMore, displayed.length, filtered.length])
 
   useEffect(() => {
     const onScroll = () => {
@@ -139,6 +131,27 @@ export default function OrderList() {
   }, [handleLoadMore])
 
   useEffect(() => { setPage(1) }, [activeTab])
+
+  if (loading) {
+    return (
+      <div className="ol-page">
+        <div className="ol-topbar">
+          <div className="container ol-topbar-inner">
+            <button className="ol-back" onClick={() => navigate(-1)}>
+              <ArrowLeft size={20} />
+            </button>
+            <h1 className="ol-title">我的订单</h1>
+            <button className="ol-search-btn" aria-label="搜索">
+              <Search size={20} />
+            </button>
+          </div>
+        </div>
+        <div className="ol-body container" style={{ paddingTop: 80, textAlign: 'center', color: '#9E9EB8' }}>
+          加载中...
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="ol-page">
@@ -191,11 +204,9 @@ export default function OrderList() {
               <OrderCard key={order.id} order={order} navigate={navigate} />
             ))}
 
-            {/* Loading Skeleton */}
-            {loading && [...Array(2)].map((_, i) => <OrderSkeleton key={`skel-${i}`} />)}
+            {loadingMore && [...Array(2)].map((_, i) => <OrderSkeleton key={`skel-${i}`} />)}
 
-            {/* Load More */}
-            {displayed.length < filtered.length && !loading && (
+            {displayed.length < filtered.length && !loadingMore && (
               <button className="ol-load-more" onClick={handleLoadMore}>
                 加载更多 <ChevronDown size={14} />
               </button>
@@ -208,11 +219,9 @@ export default function OrderList() {
         )}
       </div>
 
-      {/* ── Styles ── */}
       <style>{`
         .ol-page { min-height: 100vh; background: var(--color-bg); padding-top: 112px; }
 
-        /* Top Bar */
         .ol-topbar {
           position: fixed; top: 0; left: 0; right: 0; z-index: 100;
           height: 56px; background: rgba(255,255,255,0.95);
@@ -233,7 +242,6 @@ export default function OrderList() {
         }
         .ol-search-btn:hover { background: rgba(0,0,0,0.04); color: var(--color-text); }
 
-        /* Tabs */
         .ol-tabs-wrap {
           position: fixed; top: 56px; left: 0; right: 0; z-index: 99;
           background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
@@ -258,10 +266,8 @@ export default function OrderList() {
           transition: left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
 
-        /* Body */
         .ol-body { padding: 16px 0 32px; }
 
-        /* Empty */
         .ol-empty {
           display: flex; flex-direction: column; align-items: center;
           justify-content: center; padding: 80px 20px; text-align: center;
@@ -270,10 +276,8 @@ export default function OrderList() {
         .ol-empty-title { font-size: 17px; font-weight: 600; color: var(--color-text); margin-bottom: 8px; }
         .ol-empty-desc { font-size: 14px; color: var(--color-text-muted); margin-bottom: 24px; }
 
-        /* List */
         .ol-list { display: flex; flex-direction: column; gap: 12px; animation: fadeIn 0.35s ease; }
 
-        /* Order Card */
         .ol-card {
           background: var(--color-bg-alt); border-radius: var(--radius-lg);
           border: 1px solid var(--color-border); overflow: hidden;
@@ -337,7 +341,6 @@ export default function OrderList() {
         .ol-act-btn.success { color: var(--color-secondary); border-color: var(--color-secondary); }
         .ol-act-btn.success:hover { background: var(--color-secondary-light); }
 
-        /* Countdown */
         .ol-countdown {
           display: inline-flex; align-items: center; gap: 4px;
           font-size: 12px; font-weight: 700; color: var(--color-error);
@@ -345,7 +348,6 @@ export default function OrderList() {
         }
         .ol-countdown.expired { color: var(--color-text-muted); }
 
-        /* Skeleton */
         .ol-skeleton {
           background: var(--color-bg-alt); border-radius: var(--radius-lg);
           border: 1px solid var(--color-border); padding: 16px 18px;
@@ -361,7 +363,6 @@ export default function OrderList() {
         .ol-sk-line.w40 { width: 40%; }
         .ol-sk-line.w80 { width: 80%; }
 
-        /* Load More */
         .ol-load-more {
           width: 100%; padding: 14px; text-align: center;
           font-size: 14px; color: var(--color-primary); font-weight: 500;
@@ -391,9 +392,7 @@ export default function OrderList() {
   )
 }
 
-/* ── Order Card Sub-component ── */
-
-function OrderCard({ order, navigate }: { order: typeof mockOrders[0]; navigate: ReturnType<typeof useNavigate> }) {
+function OrderCard({ order, navigate }: { order: OrderItem; navigate: ReturnType<typeof useNavigate> }) {
   const cfg = statusConfig[order.status]
   const isActive = order.status === 'in_progress'
 

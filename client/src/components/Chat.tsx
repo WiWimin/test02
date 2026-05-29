@@ -4,15 +4,9 @@ import {
   ArrowLeft, Phone, MoreVertical, Send, Paperclip, Image as ImageIcon,
   Smile, Check, CheckCheck, Clock, ChevronDown
 } from 'lucide-react'
-
-/* ── Mock Data ── */
-
-const conversationMeta: Record<string, { name: string; avatar: string; role: string; online: boolean; orderStatus: string }> = {
-  'sitter-zhang': { name: '张阿姨', avatar: '👩', role: '服务者 · 遛狗', online: true, orderStatus: '🐕 豆豆 · 服务中' },
-  'sitter-li': { name: '李明', avatar: '👨', role: '服务者 · 上门喂猫', online: false, orderStatus: '🐈 咪咪 · 已接单' },
-  'sitter-wang': { name: '小王', avatar: '👩', role: '服务者 · 全能服务', online: true, orderStatus: '' },
-  'owner-lisi': { name: '李先生', avatar: '👨', role: '宠物主人 · 豆豆家长', online: true, orderStatus: '🐕 豆豆 · 服务中' },
-}
+import { api } from '../utils/api'
+import { getCurrentUser } from '../utils/auth'
+import { io, Socket } from 'socket.io-client'
 
 type MessageSender = 'me' | 'other' | 'system'
 type MessageType = 'text' | 'image' | 'system'
@@ -21,35 +15,6 @@ interface Message {
   id: string; sender: MessageSender; type: MessageType
   content: string; time: Date; images?: number
 }
-
-function generateMessages(convId: string): Message[] {
-  const now = Date.now()
-  const base: Message[] = [
-    { id: 'm1', sender: 'system', type: 'system', content: '您已成功预约张阿姨的上门遛狗服务', time: new Date(now - 86400000 * 2) },
-    { id: 'm2', sender: 'system', type: 'system', content: '服务时间：2026-05-28 10:00 - 11:00', time: new Date(now - 86400000 * 2 + 60000) },
-    { id: 'm3', sender: 'other', type: 'text', content: '您好！我是张阿姨，明天10点准时到您家遛豆豆 🐕', time: new Date(now - 86400000 + 3600000) },
-    { id: 'm4', sender: 'me', type: 'text', content: '张阿姨好！麻烦您了，豆豆的绳子在门口挂着', time: new Date(now - 86400000 + 3660000) },
-    { id: 'm5', sender: 'other', type: 'text', content: '好的收到！请问豆豆有什么需要特别注意的吗？', time: new Date(now - 86400000 + 3720000) },
-    { id: 'm6', sender: 'me', type: 'text', content: '它有点怕生，第一次见面先让它闻闻手就好。另外它特别喜欢玩球 🎾', time: new Date(now - 86400000 + 3780000) },
-    { id: 'm7', sender: 'other', type: 'text', content: '明白了，放心交给我吧！明天见 😊', time: new Date(now - 86400000 + 3840000) },
-    { id: 'm8', sender: 'system', type: 'system', content: '服务提醒：距离服务开始还有30分钟', time: new Date(now - 3600000) },
-    { id: 'm9', sender: 'other', type: 'image', content: '到楼下了，准备上楼', time: new Date(now - 1800000), images: 1 },
-    { id: 'm10', sender: 'other', type: 'text', content: '豆豆已经在门口等我了 🥰', time: new Date(now - 1740000) },
-    { id: 'm11', sender: 'me', type: 'text', content: '太好啦！它好像很喜欢您', time: new Date(now - 1680000) },
-    { id: 'm12', sender: 'system', type: 'system', content: '张阿姨已开始服务，当前定位：望京SOHO T3', time: new Date(now - 1200000) },
-    { id: 'm13', sender: 'other', type: 'image', content: '豆豆在小区草地上玩得很开心', time: new Date(now - 600000), images: 2 },
-    { id: 'm14', sender: 'other', type: 'text', content: '玩得可开心了，跑了好多圈 😄', time: new Date(now - 594000) },
-    { id: 'm15', sender: 'me', type: 'text', content: '哈哈看到照片了！它笑得好开心，谢谢您！🥰', time: new Date(now - 540000) },
-  ]
-  if (convId === 'sitter-li') {
-    return base.map((m, i) => ({ ...m, id: `ml${i}`, time: new Date(now - 86400000 * 3 + i * 300000) }))
-  }
-  return base
-}
-
-const quickReplies = ['收到 📩', '马上到 🚶', '已完成 ✅', '好的 👍', '再联系 😊']
-
-/* ── Time formatting ── */
 
 function formatMsgTime(date: Date): string {
   const now = new Date()
@@ -69,23 +34,86 @@ function shouldShowTime(msg: Message, prev?: Message): boolean {
   return msg.time.getTime() - prev.time.getTime() > 300000
 }
 
-/* ── Main Component ── */
+const quickReplies = ['收到 📩', '马上到 🚶', '已完成 ✅', '好的 👍', '再联系 😊']
 
 export default function Chat() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const meta = conversationMeta[id || ''] || conversationMeta['sitter-zhang']
+  const currentUser = getCurrentUser()
+
+  const [meta, setMeta] = useState<any>({ name: '加载中...', avatar: '👤', role: '', online: false, orderStatus: '' })
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [typing, setTyping] = useState(false)
+  const [loading, setLoading] = useState(true)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
-    setMessages(generateMessages(id || ''))
-    setInput('')
+    if (!id) return
+
+    const fetchConversation = async () => {
+      try {
+        const convs = await api.get<any[]>('/conversations')
+        const conv = convs?.find((c: any) => c.id === id)
+        if (conv) {
+          setMeta({
+            name: conv.participantName || conv.name || '用户',
+            avatar: conv.participantAvatar || conv.avatar || '👤',
+            role: conv.role || '',
+            online: conv.online || false,
+            orderStatus: conv.orderStatus || '',
+          })
+        }
+        const msgs = await api.get<any[]>(`/conversations/${id}/messages`)
+        setMessages((msgs || []).map((m: any) => ({
+          id: m.id,
+          sender: m.senderId === currentUser?.id ? 'me' : (m.sender === 'system' ? 'system' as const : 'other' as const),
+          type: m.type || 'text',
+          content: m.content,
+          time: new Date(m.createdAt),
+          images: m.imageCount || m.images,
+        })))
+        await api.put(`/conversations/${id}/read`, {})
+      } catch (err) {
+        console.error('Failed to fetch conversation:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchConversation()
+  }, [id])
+
+  useEffect(() => {
+    const token = localStorage.getItem('petcare_token')
+    if (!token) return
+    const socket = io('http://localhost:3001', { auth: { token } })
+    socketRef.current = socket
+
+    socket.on('new_message', (msg: any) => {
+      if (msg.conversationId === id && msg.senderId !== currentUser?.id) {
+        setMessages(prev => [...prev, {
+          id: msg.id,
+          sender: msg.sender === 'system' ? 'system' : 'other',
+          type: msg.type || 'text',
+          content: msg.content,
+          time: new Date(msg.createdAt),
+          images: msg.imageCount || msg.images,
+        }])
+        setTyping(false)
+      }
+    })
+
+    socket.on('typing', (data: any) => {
+      if (data.conversationId === id) {
+        setTyping(data.isTyping)
+      }
+    })
+
+    return () => { socket.disconnect() }
   }, [id])
 
   useEffect(() => {
@@ -96,9 +124,9 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [])
 
-  const handleSend = useCallback((text?: string) => {
+  const handleSend = useCallback(async (text?: string) => {
     const content = (text || input).trim()
-    if (!content) return
+    if (!content || !id) return
     const newMsg: Message = {
       id: `msg-${Date.now()}`,
       sender: 'me',
@@ -109,37 +137,38 @@ export default function Chat() {
     setMessages(prev => [...prev, newMsg])
     setInput('')
     setShowQuickReplies(false)
-
-    // Simulate typing
-    setTimeout(() => setTyping(true), 500)
-    setTimeout(() => {
-      setTyping(false)
-      setMessages(prev => [...prev, {
-        id: `msg-${Date.now()}-reply`,
-        sender: 'other',
-        type: 'text',
-        content: getAutoReply(content),
-        time: new Date(),
-      }])
-    }, 1500 + Math.random() * 1000)
-  }, [input])
-
-  const getAutoReply = (msg: string): string => {
-    if (msg.includes('收到')) return '好的，有需要随时找我 😊'
-    if (msg.includes('谢谢') || msg.includes('感谢')) return '不客气！这是我应该做的 🥰'
-    if (msg.includes('到哪') || msg.includes('出发')) return '已经在路上了，预计10分钟到 🚶'
-    if (msg.includes('照片') || msg.includes('图片')) return '好的，我多拍几张发您 📸'
-    if (msg.includes('拜拜') || msg.includes('再见')) return '再见！下次再见 👋'
-    if (msg.includes('完成')) return '谢谢您的信任！欢迎再次预约 🌟'
-    const replies = ['好的收到！', '没问题 👍', '了解啦 😊', '放心交给我吧！', '好的，马上处理~']
-    return replies[Math.floor(Math.random() * replies.length)]
-  }
+    try {
+      await api.post(`/conversations/${id}/messages`, { content })
+    } catch (err) {
+      console.error('Failed to send message:', err)
+    }
+  }, [input, id])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
   const lastTime = useRef<Date | null>(null)
+
+  if (loading) {
+    return (
+      <div className="chat-page">
+        <div className="chat-topbar">
+          <div className="chat-topbar-inner">
+            <button className="chat-back" onClick={() => navigate(-1)}>
+              <ArrowLeft size={20} />
+            </button>
+            <div className="chat-top-user">
+              <span className="cht-avatar">👤</span>
+              <div className="cht-info">
+                <span className="cht-name">加载中...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="chat-page">
@@ -351,7 +380,6 @@ export default function Chat() {
         .chat-time::before { left: 0; }
         .chat-time::after { right: 0; }
 
-        /* System message */
         .chat-msg-system { display: flex; justify-content: center; margin: 12px 0; }
         .cms-content {
           padding: 6px 16px; border-radius: 100px;
@@ -359,7 +387,6 @@ export default function Chat() {
           font-size: 12px; text-align: center; max-width: 80%;
         }
 
-        /* Message */
         .chat-msg {
           display: flex; align-items: flex-end; gap: 8px;
           margin-bottom: 4px; animation: fadeIn 0.3s ease;
@@ -401,7 +428,6 @@ export default function Chat() {
           align-self: flex-end; margin-bottom: 2px;
         }
 
-        /* Image message */
         .cm-image { display: flex; flex-direction: column; gap: 6px; }
         .cmi-placeholder {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -414,7 +440,6 @@ export default function Chat() {
         .cmi-placeholder:hover { transform: scale(1.02); }
         .cmi-label { font-size: 13px; color: var(--color-text-secondary); }
 
-        /* Typing */
         .cm-typing {
           display: flex; gap: 4px; padding: 12px 16px; align-items: center;
         }
@@ -430,7 +455,6 @@ export default function Chat() {
           30% { transform: translateY(-6px); }
         }
 
-        /* Input */
         .chat-input-area {
           flex-shrink: 0; background: rgba(255,255,255,0.97);
           backdrop-filter: blur(12px); border-top: 1px solid var(--color-border);
@@ -484,7 +508,6 @@ export default function Chat() {
         .cir-send.active:hover { box-shadow: 0 3px 10px rgba(255,125,90,0.3); }
         .cir-send:disabled { cursor: not-allowed; }
 
-        /* Responsive */
         @media (max-width: 480px) {
           .cm-bubble-wrap { max-width: 85%; }
           .cm-bubble-wrap.with-avatar { max-width: calc(85% - 36px); }

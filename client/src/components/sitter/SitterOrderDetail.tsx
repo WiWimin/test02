@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Phone, MessageCircle, MapPin, Clock, CheckCircle, Circle, ChevronLeft } from 'lucide-react'
+import { api } from '../../utils/api'
 
-const mockOrder = {
-  id: 'ORD-001', petEmoji: '🐕', petName: '豆豆', serviceName: '遛狗 60分钟',
-  date: '2026-05-28', time: '10:00-11:00', address: '望京SOHO T3 1808',
-  price: 79, status: 'in_progress', payStatus: '已支付',
-  ownerName: '李先生', ownerPhone: '138****8888',
-  note: '豆豆有点怕生，请温柔对待，家里有摄像头 🎥',
+const emptyOrder = {
+  id: '', petEmoji: '', petName: '', serviceName: '',
+  date: '', time: '', address: '',
+  price: 0, status: 'pending', payStatus: '',
+  ownerName: '', ownerPhone: '',
+  note: '',
 }
 
 const steps = [
@@ -20,9 +21,13 @@ const steps = [
 export default function SitterOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [currentStatus] = useState(mockOrder.status)
+  const [order, setOrder] = useState<any>(emptyOrder)
 
-  const currentStep = steps.findIndex(s => s.key === currentStatus)
+  useEffect(() => {
+    if (id) api.get('/orders/' + id).then(setOrder)
+  }, [id])
+
+  const currentStep = steps.findIndex(s => s.key === order.status)
 
   return (
     <div className="sod-page">
@@ -49,16 +54,16 @@ export default function SitterOrderDetail() {
 
       <div className="sod-card">
         <div className="sod-card-hdr">
-          <span className="sod-card-emoji">{mockOrder.petEmoji}</span>
+          <span className="sod-card-emoji">{order.petEmoji}</span>
           <div>
-            <h2>{mockOrder.petName} · {mockOrder.serviceName}</h2>
-            <span className="sod-card-id">订单号: {mockOrder.id}</span>
+            <h2>{order.petName} · {order.serviceName}</h2>
+            <span className="sod-card-id">订单号: {order.id}</span>
           </div>
         </div>
         <div className="sod-card-body">
-          <div className="sod-info-row"><Clock size={14} /><span>{mockOrder.date} {mockOrder.time}</span></div>
-          <div className="sod-info-row"><MapPin size={14} /><span>{mockOrder.address}</span></div>
-          <div className="sod-info-row"><span className="sod-price">¥{mockOrder.price}</span><span className="sod-pay-status">{mockOrder.payStatus}</span></div>
+          <div className="sod-info-row"><Clock size={14} /><span>{order.date} {order.time}</span></div>
+          <div className="sod-info-row"><MapPin size={14} /><span>{order.address}</span></div>
+          <div className="sod-info-row"><span className="sod-price">¥{order.price}</span><span className="sod-pay-status">{order.payStatus}</span></div>
         </div>
       </div>
 
@@ -68,39 +73,39 @@ export default function SitterOrderDetail() {
           <div className="sod-owner-info">
             <span className="sod-owner-avatar">👤</span>
             <div>
-              <span className="sod-owner-name">{mockOrder.ownerName}</span>
-              <span className="sod-owner-phone">{mockOrder.ownerPhone}</span>
+              <span className="sod-owner-name">{order.ownerName}</span>
+              <span className="sod-owner-phone">{order.ownerPhone}</span>
             </div>
           </div>
         </div>
       </div>
 
-      {mockOrder.note && (
+      {order.note && (
         <div className="sod-card">
           <div className="sod-card-hdr"><h3>服务备注</h3></div>
           <div className="sod-card-body">
-            <p className="sod-note">{mockOrder.note}</p>
+            <p className="sod-note">{order.note}</p>
           </div>
         </div>
       )}
 
       <div className="sod-actions">
-        <button className="sod-action-btn outline" onClick={() => alert(`拨打 ${mockOrder.ownerPhone}`)}>
+        <button className="sod-action-btn outline" onClick={() => alert(`拨打 ${order.ownerPhone}`)}>
           <Phone size={16} /> 联系主人
         </button>
-        <button className="sod-action-btn outline" onClick={() => navigate(`/chat/${mockOrder.id}`)}>
+        <button className="sod-action-btn outline" onClick={() => navigate(`/chat/${order.id}`)}>
           <MessageCircle size={16} /> 发消息
         </button>
-        <button className="sod-action-btn outline" onClick={() => alert(`导航至: ${mockOrder.address}`)}>
+        <button className="sod-action-btn outline" onClick={() => alert(`导航至: ${order.address}`)}>
           <MapPin size={16} /> 导航前往
         </button>
-        {currentStatus === 'in_progress' && (
-          <button className="sod-action-btn primary" onClick={() => alert('✅ 服务已完成')}>
+        {order.status === 'in_progress' && (
+          <button className="sod-action-btn primary" onClick={() => api.put('/orders/' + order.id + '/complete').then(() => setOrder({ ...order, status: 'completed' }))}>
             <CheckCircle size={16} /> 完成服务
           </button>
         )}
-        {currentStatus === 'accepted' && (
-          <button className="sod-action-btn primary" onClick={() => alert('📍 已签到，开始服务')}>
+        {order.status === 'accepted' && (
+          <button className="sod-action-btn primary" onClick={() => api.put('/orders/' + order.id + '/start').then(() => setOrder({ ...order, status: 'in_progress' }))}>
             <MapPin size={16} /> 开始服务
           </button>
         )}

@@ -4,31 +4,7 @@ import {
   Clock, MapPin, Phone, MessageCircle, Calendar, DollarSign,
   TrendingUp, Users, Check, X, Bell, AlertCircle
 } from 'lucide-react'
-
-const sitterInfo = {
-  name: '张阿姨', avatar: '👩', bgColor: '#FFF0EB',
-  level: '金牌服务者', rating: 4.9, completedOrders: 287,
-}
-
-const incomeStats = [
-  { label: '今日收入', value: 320, icon: DollarSign, color: '#FF7D5A', orders: 3, change: '+12%', up: true },
-  { label: '本周收入', value: 1280, icon: TrendingUp, color: '#45B7A0', orders: 16, change: '+8%', up: true },
-  { label: '本月收入', value: 4560, icon: Calendar, color: '#4A90D9', orders: 58, change: '+15%', up: true },
-  { label: '总收入', value: 22300, icon: Users, color: '#9B59B6', orders: 287, change: '+22%', up: true },
-]
-
-const todaySchedule = [
-  { id: 'sched-1', time: '09:00', endTime: '10:00', petEmoji: '🐕', petName: '豆豆', serviceName: '遛狗 60分钟', address: '望京SOHO T3 1808', ownerName: '李先生', ownerPhone: '138****8888', status: 'completed' },
-  { id: 'sched-2', time: '10:00', endTime: '11:00', petEmoji: '🐕', petName: '可乐', serviceName: '遛狗 60分钟', address: '华润橡树湾5-2-801', ownerName: '可乐妈妈', ownerPhone: '139****1234', status: 'in_progress' },
-  { id: 'sched-3', time: '14:00', endTime: '14:30', petEmoji: '🐈', petName: '咪咪', serviceName: '上门喂食', address: '融泽嘉园12号院3-1206', ownerName: '咪咪爸爸', ownerPhone: '136****5678', status: 'pending' },
-  { id: 'sched-4', time: '16:00', endTime: '17:00', petEmoji: '🐕', petName: '团子', serviceName: '遛狗+清洁', address: '华联商场后侧2-302', ownerName: '团子妈妈', ownerPhone: '137****9012', status: 'pending' },
-  { id: 'sched-5', time: '19:00', endTime: '20:00', petEmoji: '🐈', petName: '花花', serviceName: '上门喂猫', address: '望京西园三区502', ownerName: '花花主人', ownerPhone: '158****3456', status: 'pending' },
-]
-
-const pendingOrders = [
-  { id: 'po-1', ownerName: '王女士', petEmoji: '🐕', petName: '大毛', serviceName: '遛狗 30分钟', price: 49, timeLeft: 12, createdAt: Date.now() },
-  { id: 'po-2', ownerName: '刘先生', petEmoji: '🐈', petName: '雪球', serviceName: '上门喂猫', price: 39, timeLeft: 8, createdAt: Date.now() },
-]
+import { api } from '../../utils/api'
 
 function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string }) {
   const [display, setDisplay] = useState(0)
@@ -58,15 +34,57 @@ function OrderCountdown({ createdAt }: { createdAt: number }) {
 export default function SitterDashboard() {
   const navigate = useNavigate()
   const [activeService, setActiveService] = useState<string | null>(null)
-  const [notifications, setNotifications] = useState(pendingOrders)
   const [sidebarTab, setSidebarTab] = useState<'todo' | 'notifications'>('todo')
+  const [user, setUser] = useState<any>(null)
+  const [wallet, setWallet] = useState<any>(null)
+  const [todaySched, setTodaySched] = useState<any[]>([])
+  const [pendingOrders, setPendingOrders] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleStartService = (id: string) => {
-    setActiveService(id); setTimeout(() => setActiveService(null), 2000)
-    alert('📍 已签到！开始服务\n位置记录已开启')
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true)
+      try {
+        const [me, walletRes, todayRes, pendingRes] = await Promise.all([
+          api.get<any>('/auth/me'),
+          api.get<any>('/wallet'),
+          api.get<any[]>('/orders/today'),
+          api.get<any[]>('/orders/pending'),
+        ])
+        setUser(me || null)
+        setWallet(walletRes || null)
+        setTodaySched(todayRes || [])
+        setPendingOrders(pendingRes || [])
+        setNotifications(pendingRes || [])
+      } catch (err) {
+        console.error('Dashboard fetch failed:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchAll()
+  }, [])
+
+  const handleStartService = async (id: string) => {
+    try {
+      await api.put(`/orders/${id}/start`)
+      setActiveService(id)
+      setTimeout(() => setActiveService(null), 2000)
+    } catch (err) { console.error(err) }
   }
-  const handleAcceptOrder = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id))
-  const handleRejectOrder = (id: string) => setNotifications(prev => prev.filter(n => n.id !== id))
+  const handleAcceptOrder = async (id: string) => {
+    try {
+      await api.put(`/orders/${id}/accept`)
+      setNotifications(prev => prev.filter(n => n.id !== id))
+    } catch (err) { console.error(err) }
+  }
+  const handleRejectOrder = async (id: string) => {
+    try {
+      await api.put(`/orders/${id}/reject`)
+      setNotifications(prev => prev.filter(n => n.id !== id))
+    } catch (err) { console.error(err) }
+  }
 
   const getScheduleStatus = (status: string) => {
     switch (status) {
@@ -76,11 +94,20 @@ export default function SitterDashboard() {
     }
   }
 
+  if (loading) return <div className="sd-page" style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'60vh', color:'var(--color-text-muted)' }}>加载中...</div>
+
+  const stats = [
+    { label: '今日收入', value: wallet?.today_earned || 0, icon: DollarSign, color: '#FF7D5A', orders: 0, change: '-', up: true },
+    { label: '本周收入', value: wallet?.week_earned || 0, icon: TrendingUp, color: '#45B7A0', orders: 0, change: '-', up: true },
+    { label: '本月收入', value: wallet?.month_earned || 0, icon: Calendar, color: '#4A90D9', orders: 0, change: '-', up: true },
+    { label: '总收入', value: wallet?.total_earned || 0, icon: Users, color: '#9B59B6', orders: 0, change: '-', up: true },
+  ]
+
   return (
     <div className="sd-page">
       <section className="sd-income-section">
         <div className="sd-income-grid">
-          {incomeStats.map((stat, i) => (
+          {stats.map((stat, i) => (
             <div key={stat.label} className="sd-income-card" style={{ '--delay': `${i * 0.08}s` } as React.CSSProperties}>
               <div className="sd-ic-top">
                 <span className="sd-ic-label">{stat.label}</span>
@@ -109,13 +136,13 @@ export default function SitterDashboard() {
               <span className="sd-schedule-date">{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</span>
             </div>
             <div className="sd-schedule-list">
-              {todaySchedule.map((item, i) => {
+              {todaySched.map((item, i) => {
                 const statusInfo = getScheduleStatus(item.status); const isNow = item.status === 'in_progress'
                 return (
                   <div key={item.id} className={`sd-sched-item ${isNow ? 'active' : ''} ${item.status === 'completed' ? 'done' : ''}`}>
                     <div className="sd-si-timeline">
                       <div className={`sd-si-dot ${isNow ? 'pulse' : ''} ${item.status === 'completed' ? 'done' : ''}`} />
-                      {i < todaySchedule.length - 1 && <div className="sd-si-line" />}
+                      {i < todaySched.length - 1 && <div className="sd-si-line" />}
                     </div>
                     <div className="sd-si-card">
                       <div className="sd-si-top">
@@ -151,7 +178,7 @@ export default function SitterDashboard() {
           <div className="sd-sidebar">
             <div className="sd-sb-tabs">
               <button className={`sd-sb-tab ${sidebarTab === 'todo' ? 'active' : ''}`} onClick={() => setSidebarTab('todo')}>
-                今日待办 <span className="sd-sb-tab-badge">{todaySchedule.filter(s => s.status === 'pending').length}</span>
+                今日待办 <span className="sd-sb-tab-badge">{todaySched.filter(s => s.status === 'pending').length}</span>
               </button>
               <button className={`sd-sb-tab ${sidebarTab === 'notifications' ? 'active' : ''}`} onClick={() => setSidebarTab('notifications')}>
                 新订单 <span className="sd-sb-tab-badge urgent">{notifications.length}</span>
@@ -160,10 +187,10 @@ export default function SitterDashboard() {
             {sidebarTab === 'todo' && (
               <div className="sd-sb-content">
                 <div className="sd-todo-list">
-                  {todaySchedule.filter(s => s.status === 'pending').length === 0 ? (
+                  {todaySched.filter(s => s.status === 'pending').length === 0 ? (
                     <div className="sd-todo-empty">🎉 今日所有服务已完成</div>
                   ) : (
-                    todaySchedule.filter(s => s.status === 'pending').map(item => (
+                    todaySched.filter(s => s.status === 'pending').map(item => (
                       <div key={item.id} className="sd-todo-item">
                         <div className="sd-todo-time"><Clock size={13} /> {item.time} - {item.endTime}</div>
                         <div className="sd-todo-body">

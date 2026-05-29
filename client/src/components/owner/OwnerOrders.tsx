@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, MapPin, ChevronRight, MessageCircle, Star, Search } from 'lucide-react'
+import { api } from '../../utils/api'
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -9,37 +10,78 @@ const tabs = [
   { key: 'completed', label: '已完成' },
 ]
 
-const mockOrders = [
-  { id: 'O20240528001', sitter: '张阿姨', sitterAvatar: '👩', service: '上门喂养 - 猫咪', petName: '咪咪', date: '2024-05-28', time: '10:00-11:00', status: 'in_progress', amount: 88, address: '望京SOHO T3 1808' },
-  { id: 'O20240527002', sitter: '李阿姨', sitterAvatar: '👩', service: '遛狗', petName: '旺财', date: '2024-05-27', time: '14:00-14:30', status: 'completed', amount: 49, address: '融泽嘉园12号院' },
-  { id: 'O20240526003', sitter: '小王', sitterAvatar: '🧑', service: '上门喂养 - 狗狗', petName: '豆豆', date: '2024-05-26', time: '09:00-10:00', status: 'completed', amount: 128, address: '华润橡树湾5-2-801' },
-  { id: 'O20240525004', sitter: '赵阿姨', sitterAvatar: '👩', service: '宠物清洁', petName: '团子', date: '2024-05-25', time: '16:00-17:00', status: 'pending', amount: 69, address: '望京SOHO T3 1808' },
-  { id: 'O20240524005', sitter: '张阿姨', sitterAvatar: '👩', service: '遛狗 60分钟', petName: '豆豆', date: '2024-05-24', time: '09:00-10:00', status: 'cancelled', amount: 79, address: '望京SOHO T3 1808' },
-]
+interface OrderItem {
+  id: string
+  sitter: string
+  sitterAvatar: string
+  service: string
+  petName: string
+  date: string
+  time: string
+  status: string
+  amount: number
+  address: string
+}
 
 const statusMap: Record<string, { label: string; className: string }> = {
-  pending: { label: '待处理', className: 'warning' },
+  pending_pay: { label: '待支付', className: 'warning' },
+  pending_accept: { label: '待接单', className: 'warning' },
+  accepted: { label: '已接单', className: 'warning' },
   in_progress: { label: '进行中', className: 'active' },
   completed: { label: '已完成', className: 'done' },
+  reviewed: { label: '已评价', className: 'done' },
   cancelled: { label: '已取消', className: 'cancel' },
+}
+
+const tabStatusMap: Record<string, string> = {
+  all: 'all',
+  pending: 'pending_accept',
+  active: 'in_progress',
+  completed: 'completed',
 }
 
 export default function OwnerOrders() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('all')
   const [search, setSearch] = useState('')
+  const [orders, setOrders] = useState<OrderItem[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filtered = mockOrders.filter(o => {
-    const matchTab = activeTab === 'all' || o.status === activeTab
-    const matchSearch = o.sitter.includes(search) || o.service.includes(search) || o.petName.includes(search)
-    return matchTab && matchSearch
-  })
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true)
+      try {
+        const statusParam = tabStatusMap[activeTab] || 'all'
+        const searchParam = search ? `&search=${encodeURIComponent(search)}` : ''
+        const res = await api.get<{ items: any[] }>(`/orders?status=${statusParam}&pageSize=20${searchParam}`)
+        const items = (res as any)?.items || []
+        setOrders(items.map((o: any) => ({
+          id: o.id,
+          sitter: o.sitter?.name || '',
+          sitterAvatar: o.sitter?.avatar || '👩',
+          service: o.services?.map((s: any) => s.name).join('、') || '',
+          petName: o.pets?.[0]?.pet?.name || '',
+          date: o.service_date ? new Date(o.service_date).toLocaleDateString('zh-CN') : '',
+          time: o.service_time || '',
+          status: o.status,
+          amount: o.total || 0,
+          address: o.address ? `${o.address.address} ${o.address.detail}`.trim() : '',
+        })))
+      } catch (err) {
+        console.error('Failed to load orders:', err)
+        setOrders([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrders()
+  }, [activeTab, search])
 
   return (
     <div className="oo-page">
       <div className="oo-header">
         <h2>我的订单</h2>
-        <span className="oo-count">共{mockOrders.length}单</span>
+        <span className="oo-count">共{orders.length}单</span>
       </div>
 
       {/* Search */}
@@ -58,14 +100,16 @@ export default function OwnerOrders() {
       </div>
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="oo-empty">加载中...</div>
+      ) : orders.length === 0 ? (
         <div className="oo-empty">暂无订单</div>
       ) : (
         <div className="oo-list">
-          {filtered.map(order => {
+          {orders.map(order => {
             const s = statusMap[order.status] || { label: '未知', className: '' }
             return (
-              <div key={order.id} className="oo-card" onClick={() => navigate('/orders')}>
+              <div key={order.id} className="oo-card" onClick={() => navigate(`/home/owner/orders/${order.id}`)}>
                 <div className="oo-card-left">
                   <div className="oo-card-avatar">{order.sitterAvatar}</div>
                 </div>

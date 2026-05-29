@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, PawPrint, PenLine, Trash2, X, ChevronRight, AlertCircle } from 'lucide-react'
+import { api } from '../../utils/api'
 
 interface Pet {
   id: number
@@ -13,21 +14,42 @@ interface Pet {
   color: string
 }
 
-const defaultPets: Pet[] = [
-  { id: 1, name: '咪咪', type: 'cat', breed: '英短蓝猫', age: '2岁3个月', weight: '4.5kg', gender: 'female', avatar: '🐱', color: '#FFE0D5' },
-  { id: 2, name: '旺财', type: 'dog', breed: '柯基', age: '1岁', weight: '12kg', gender: 'male', avatar: '🐶', color: '#D5F0EB' },
-]
-
 const petTypeIcons = { cat: '🐱', dog: '🐶', other: '🐰' }
 const petTypeLabels = { cat: '猫咪', dog: '狗狗', other: '其他' }
+const petTypeColors: Record<string, string> = { cat: '#FFE0D5', dog: '#D5F0EB', other: '#F0E6FF' }
 
 export default function OwnerPets() {
-  const [pets, setPets] = useState<Pet[]>(defaultPets)
+  const [pets, setPets] = useState<Pet[]>([])
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editPet, setEditPet] = useState<Pet | null>(null)
   const [form, setForm] = useState({ name: '', type: 'cat' as Pet['type'], breed: '', age: '', weight: '', gender: 'male' as Pet['gender'] })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const fetchPets = async () => {
+    try {
+      const data = await api.get<any[]>('/pets')
+      setPets((data || []).map((p: any) => ({
+        id: p.id,
+        name: p.name || '',
+        type: p.type || 'other',
+        breed: p.breed || '',
+        age: p.age || '',
+        weight: p.weight || '',
+        gender: p.gender || 'male',
+        avatar: petTypeIcons[p.type as keyof typeof petTypeIcons] || '🐾',
+        color: petTypeColors[p.type] || '#F0E6FF',
+      })))
+    } catch (err) {
+      console.error('Failed to load pets:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchPets() }, [])
 
   const openAdd = () => {
     setEditPet(null)
@@ -45,7 +67,7 @@ export default function OwnerPets() {
 
   const closeForm = () => { setShowForm(false); setEditPet(null); setErrors({}) }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const errs: Record<string, string> = {}
     if (!form.name.trim()) errs.name = '请输入宠物昵称'
     if (!form.breed.trim()) errs.breed = '请输入品种'
@@ -54,25 +76,41 @@ export default function OwnerPets() {
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
 
-    if (editPet) {
-      setPets(prev => prev.map(p => p.id === editPet.id ? { ...p, ...form, avatar: petTypeIcons[form.type], color: form.type === 'cat' ? '#FFE0D5' : '#D5F0EB' } : p))
-      showToast('修改成功', 'success')
-    } else {
-      const newPet: Pet = { id: Date.now(), ...form, avatar: petTypeIcons[form.type], color: form.type === 'cat' ? '#FFE0D5' : '#D5F0EB' }
-      setPets(prev => [...prev, newPet])
-      showToast('添加成功', 'success')
+    setSaving(true)
+    try {
+      if (editPet) {
+        await api.put(`/pets/${editPet.id}`, form)
+        showToast('修改成功', 'success')
+      } else {
+        await api.post('/pets', form)
+        showToast('添加成功', 'success')
+      }
+      closeForm()
+      await fetchPets()
+    } catch (err: any) {
+      showToast(err.message || '操作失败', 'error')
+    } finally {
+      setSaving(false)
     }
-    closeForm()
   }
 
-  const handleDelete = (id: number) => {
-    setPets(prev => prev.filter(p => p.id !== id))
-    showToast('已删除宠物', 'success')
+  const handleDelete = async (id: number) => {
+    try {
+      await api.delete(`/pets/${id}`)
+      setPets(prev => prev.filter(p => p.id !== id))
+      showToast('已删除宠物', 'success')
+    } catch (err: any) {
+      showToast(err.message || '删除失败', 'error')
+    }
   }
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2500)
+  }
+
+  if (loading) {
+    return <div className="op-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
   }
 
   return (
@@ -171,7 +209,7 @@ export default function OwnerPets() {
             </div>
             <div className="op-modal-footer">
               <button className="op-btn-cancel" onClick={closeForm}>取消</button>
-              <button className="op-btn-save" onClick={handleSave}>{editPet ? '保存修改' : '添加宠物'}</button>
+              <button className="op-btn-save" onClick={handleSave} disabled={saving}>{saving ? '保存中...' : (editPet ? '保存修改' : '添加宠物')}</button>
             </div>
           </div>
         </div>

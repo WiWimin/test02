@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Camera, CheckCircle, Clock, Upload } from 'lucide-react'
+import { api } from '../../utils/api'
 
 const certifications = [
   { name: '身份证实名认证', status: 'verified', date: '2025-03-15' },
@@ -9,7 +10,16 @@ const certifications = [
 ]
 
 export default function Profile() {
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    api.get('/auth/me').then((data: any) => {
+      setUser(data)
+      setLoading(false)
+    })
+  }, [])
 
   return (
     <div className="pf-page">

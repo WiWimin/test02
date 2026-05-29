@@ -1,18 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Clock, MapPin } from 'lucide-react'
+import { api } from '../../utils/api'
 
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 
-const scheduleData: Record<string, { time: string; petEmoji: string; petName: string; serviceName: string; address: string; status: string }[]> = {
-  '2026-5-28': [
-    { time: '09:00-10:00', petEmoji: '🐕', petName: '豆豆', serviceName: '遛狗 60分钟', address: '望京SOHO T3 1808', status: 'completed' },
-    { time: '10:00-11:00', petEmoji: '🐕', petName: '可乐', serviceName: '遛狗 60分钟', address: '华润橡树湾5-2-801', status: 'in_progress' },
-    { time: '14:00-14:30', petEmoji: '🐈', petName: '咪咪', serviceName: '上门喂食', address: '融泽嘉园12号院3-1206', status: 'pending' },
-  ],
-  '2026-5-29': [
-    { time: '10:00-11:00', petEmoji: '🐕', petName: '大毛', serviceName: '遛狗 60分钟', address: '望京SOHO T2 1506', status: 'pending' },
-  ],
-}
+const scheduleData: Record<string, { time: string; petEmoji: string; petName: string; serviceName: string; address: string; status: string }[]> = {}
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
@@ -30,9 +22,14 @@ const statusColors: Record<string, string> = {
 
 export default function Schedule() {
   const now = new Date()
+  const [schedule, setSchedule] = useState<any>(null)
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [selectedDate, setSelectedDate] = useState(`${year}-${month + 1}-${now.getDate()}`)
+
+  useEffect(() => {
+    api.get('/orders/today').then(setSchedule)
+  }, [])
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
@@ -45,7 +42,7 @@ export default function Schedule() {
     setSelectedDate(key)
   }
 
-  const dayOrders = scheduleData[selectedDate] || []
+  const dayOrders = (schedule?.[selectedDate]) || []
 
   return (
     <div className="sc-page">
@@ -66,7 +63,7 @@ export default function Schedule() {
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1
             const key = `${year}-${month + 1}-${day}`
-            const hasOrders = scheduleData[key]?.length > 0
+            const hasOrders = (schedule?.[key]?.length) > 0
             const isSelected = selectedDate === key
             const isToday = now.getFullYear() === year && now.getMonth() === month && now.getDate() === day
             return (

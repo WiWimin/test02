@@ -1,17 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Edit3, Power, Eye, X, Check } from 'lucide-react'
+import { api } from '../../utils/api'
 
 interface ServiceItem {
   id: string; icon: string; name: string; price: number; duration: number;
   description: string; status: 'active' | 'inactive'; completedOrders: number;
 }
-
-const initialServices: ServiceItem[] = [
-  { id: 'svc-1', icon: '🐕', name: '遛狗 30分钟', price: 49, duration: 30, description: '基础遛狗服务，含捡屎袋、湿巾', status: 'active', completedOrders: 28 },
-  { id: 'svc-2', icon: '🐕', name: '遛狗 60分钟', price: 79, duration: 60, description: '深度遛狗服务，含基础训练指令', status: 'active', completedOrders: 56 },
-  { id: 'svc-3', icon: '🐈', name: '上门喂猫', price: 39, duration: 30, description: '含喂食、换水、清理猫砂', status: 'active', completedOrders: 42 },
-  { id: 'svc-4', icon: '🐕', name: '宠物清洁', price: 69, duration: 45, description: '含梳毛、擦脚、基础清洁', status: 'inactive', completedOrders: 15 },
-]
 
 const defaultWorkHours = [
   { day: '周一~周五', range: '09:00 - 20:00' },
@@ -19,12 +13,21 @@ const defaultWorkHours = [
 ]
 
 export default function MyServices() {
-  const [services, setServices] = useState(initialServices)
+  const [services, setServices] = useState<any[]>([])
+
+  useEffect(() => {
+    api.get('/services').then((data: any) => setServices(data || []))
+  }, [])
   const [showEdit, setShowEdit] = useState(false)
   const [editing, setEditing] = useState<ServiceItem | null>(null)
 
   const toggleStatus = (id: string) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' } : s))
+    const svc = services.find(s => s.id === id)
+    if (!svc) return
+    const newStatus = svc.status === 'active' ? 'inactive' : 'active'
+    api.put('/services/' + id, { status: newStatus }).then(() => {
+      setServices(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s))
+    })
   }
 
   const openNew = () => { setEditing(null); setShowEdit(true) }
@@ -98,7 +101,12 @@ export default function MyServices() {
               <textarea defaultValue={editing?.description || ''} placeholder="简要描述服务内容" rows={3} />
               <div className="ms-form-actions">
                 <button className="ms-form-btn cancel" onClick={() => setShowEdit(false)}>取消</button>
-                <button className="ms-form-btn save" onClick={() => { alert(editing ? '已保存修改' : '已添加新服务'); setShowEdit(false) }}>保存</button>
+                <button className="ms-form-btn save" onClick={() => {
+                  const el = document.querySelectorAll('.ms-form input, .ms-form textarea') as NodeListOf<HTMLInputElement | HTMLTextAreaElement>
+                  const body = { name: el[0].value, price: Number(el[1].value), duration: Number(el[2].value), description: el[3].value }
+                  const req = editing ? api.put('/services/' + editing.id, body) : api.post('/services', body)
+                  req.then(() => { setShowEdit(false); api.get('/services').then((d: any) => setServices(d || [])) })
+                }}>保存</button>
               </div>
             </div>
           </div>

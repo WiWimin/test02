@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import Header from './components/Header'
 import HeroSection from './components/HeroSection'
 import ServiceCategories from './components/ServiceCategories'
@@ -35,6 +35,16 @@ import OwnerAddresses from './components/owner/OwnerAddresses'
 import RoleSelect from './components/RoleSelect'
 import RegisterPrompt from './components/RegisterPrompt'
 
+function ProtectedRoute({ children, roles }: { children: JSX.Element; roles?: string[] }) {
+  const token = localStorage.getItem('petcare_token')
+  if (!token) return <Navigate to="/login" replace />
+  if (roles) {
+    const cached = (() => { try { return JSON.parse(localStorage.getItem('petcare_user') || 'null') } catch { return null } })()
+    if (!cached || !roles.includes(cached.role)) return <Navigate to="/" replace />
+  }
+  return children
+}
+
 function HomePage() {
   return (
     <>
@@ -58,13 +68,13 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/services/:id" element={<ServiceDetail />} />
-        <Route path="/booking/new" element={<NewBooking />} />
-        <Route path="/orders" element={<OrderList />} />
+        <Route path="/booking/new" element={<ProtectedRoute><NewBooking /></ProtectedRoute>} />
+        <Route path="/orders" element={<ProtectedRoute roles={['owner']}><OrderList /></ProtectedRoute>} />
         <Route path="/login" element={<RoleSelect mode="login" />} />
         <Route path="/register" element={<RoleSelect mode="register" />} />
         <Route path="/auth" element={<AuthPage mode="login" />} />
-        <Route path="/sitter/apply" element={<SitterApplication />} />
-        <Route path="/sitter" element={<SitterLayout />}>
+        <Route path="/sitter/apply" element={<ProtectedRoute roles={['owner']}><SitterApplication /></ProtectedRoute>} />
+        <Route path="/sitter" element={<ProtectedRoute roles={['sitter']}><SitterLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="orders" element={<SitterOrders />} />
@@ -75,10 +85,10 @@ function App() {
           <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
         </Route>
-        <Route path="/chat/:id" element={<Chat />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+        <Route path="/admin/dashboard" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/guarantee/:id" element={<GuaranteePage />} />
-        <Route path="/home/owner" element={<OwnerLayout />}>
+        <Route path="/home/owner" element={<ProtectedRoute roles={['owner']}><OwnerLayout /></ProtectedRoute>}>
           <Route index element={<OwnerHome />} />
           <Route path="market" element={<OwnerMarket />} />
           <Route path="orders" element={<OwnerOrders />} />

@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { PawPrint, Bell, Menu, X } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { PawPrint, Bell, Menu, X, User as UserIcon, LogOut } from 'lucide-react'
+import { isLoggedIn, logout } from '../utils/auth'
 
 export default function Header() {
+  const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn())
+
+  const cached = (() => { try { return JSON.parse(localStorage.getItem('petcare_user') || 'null') } catch { return null } })()
+  const displayName = cached?.name || cached?.username || ''
+  const userRole = cached?.role || ''
+
+  const handleLogout = () => { logout(); setLoggedIn(false); navigate('/') }
 
   useEffect(() => {
+    setLoggedIn(isLoggedIn())
     const onScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
@@ -28,8 +38,21 @@ export default function Header() {
           <a href="#guarantees" className="nav-link" onClick={() => setMobileOpen(false)}>保障</a>
           <a href="#reviews" className="nav-link" onClick={() => setMobileOpen(false)}>评价</a>
           <div className="nav-auth">
-            <Link to="/login" className="nav-link nav-login">登录</Link>
-            <Link to="/register" className="btn btn-primary nav-register">免费注册</Link>
+            {loggedIn ? (
+              <>
+                <span className="nav-user-info">
+                  <UserIcon size={16} />
+                  <span>{displayName}</span>
+                  {userRole && <span className="nav-user-role">{userRole === 'admin' ? '管理员' : userRole === 'sitter' ? '服务者' : '主人'}</span>}
+                </span>
+                <button className="nav-link nav-logout" onClick={handleLogout}><LogOut size={14} /> 退出</button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="nav-link nav-login">登录</Link>
+                <Link to="/register" className="btn btn-primary nav-register">免费注册</Link>
+              </>
+            )}
           </div>
         </nav>
 
@@ -149,6 +172,34 @@ export default function Header() {
           padding-left: 16px;
           border-left: 1px solid var(--color-border);
         }
+
+        .nav-user-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--color-text);
+        }
+
+        .nav-user-role {
+          font-size: 11px;
+          font-weight: 500;
+          color: var(--color-primary);
+          background: var(--color-primary-light);
+          padding: 1px 8px;
+          border-radius: 100px;
+        }
+
+        .nav-logout {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 13px;
+          color: var(--color-text-muted);
+        }
+
+        .nav-logout:hover { color: var(--color-error) !important; }
 
         .nav-login {
           color: var(--color-text);

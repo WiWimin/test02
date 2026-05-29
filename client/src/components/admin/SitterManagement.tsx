@@ -1,16 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Check, X, Eye, Star, Award, MapPin, Phone, BadgeCheck, AlertTriangle } from 'lucide-react'
-
-const mockSitters = [
-  { id: 'S-001', name: '张阿姨', avatar: '👩', phone: '136****5678', rating: 4.9, orders: 128, satisfaction: '98%', certifications: ['宠物护理证', '无犯罪记录'], status: 'active', joinDate: '2025-11-01', badge: '金牌服务者', level: 5, pending: false, city: '北京市朝阳区', intro: '10年养宠经验，细心负责' },
-  { id: 'S-002', name: '李明', avatar: '👨', phone: '137****9012', rating: 4.8, orders: 96, satisfaction: '96%', certifications: ['宠物护理证'], status: 'active', joinDate: '2025-12-10', badge: '五星服务者', level: 4, pending: false, city: '北京市海淀区', intro: '专业宠物美容师' },
-  { id: 'S-003', name: '小王', avatar: '👩', phone: '185****2345', rating: 4.9, orders: 203, satisfaction: '99%', certifications: ['宠物护理证', '无犯罪记录', '营养师证'], status: 'active', joinDate: '2025-10-15', badge: '金牌服务者', level: 5, pending: false, city: '北京市西城区', intro: '宠物营养师，科学喂养' },
-  { id: 'S-004', name: '赵师傅', avatar: '👨', phone: '159****6789', rating: 4.7, orders: 72, satisfaction: '95%', certifications: ['宠物护理证'], status: 'active', joinDate: '2026-01-20', badge: '四星服务者', level: 3, pending: false, city: '北京市东城区', intro: '耐心细致，宠物都喜欢我' },
-  { id: 'S-005', name: '陈姐', avatar: '👩', phone: '132****3456', rating: 4.8, orders: 88, satisfaction: '97%', certifications: ['无犯罪记录'], status: 'active', joinDate: '2026-02-01', badge: '四星服务者', level: 3, pending: false, city: '北京市通州区', intro: '养过3只猫，懂猫咪心理' },
-  { id: 'S-006', name: '刘阿姨', avatar: '👩', phone: '188****9012', rating: 0, orders: 0, satisfaction: '--', certifications: ['宠物护理证'], status: 'pending', joinDate: '2026-05-25', badge: '', level: 1, pending: true, city: '北京市大兴区', intro: '退休在家，喜爱小动物' },
-  { id: 'S-007', name: '周师傅', avatar: '👨', phone: '186****7890', rating: 0, orders: 0, satisfaction: '--', certifications: [], status: 'pending', joinDate: '2026-05-27', badge: '', level: 1, pending: true, city: '北京市丰台区', intro: '想利用业余时间做宠物服务' },
-  { id: 'S-008', name: '吴女士', avatar: '👩', phone: '135****2345', rating: 0, orders: 0, satisfaction: '--', certifications: ['营养师证'], status: 'pending', joinDate: '2026-05-27', badge: '', level: 1, pending: true, city: '北京市昌平区', intro: '宠物营养学专业毕业' },
-]
+import { api } from '../../utils/api'
 
 const badgeColors: Record<string, string> = {
   '金牌服务者': 'linear-gradient(135deg, #FFD93D, #FFC107)',
@@ -18,7 +8,7 @@ const badgeColors: Record<string, string> = {
   '四星服务者': 'linear-gradient(135deg, #81C784, #4CAF50)',
 }
 
-function SitterDetailModal({ sitter, onClose }: { sitter: typeof mockSitters[0]; onClose: () => void }) {
+function SitterDetailModal({ sitter, onClose }: { sitter: any; onClose: () => void }) {
   return (
     <div className="sm-modal-overlay" onClick={onClose}>
       <div className="sm-modal" onClick={e => e.stopPropagation()}>
@@ -54,8 +44,8 @@ function SitterDetailModal({ sitter, onClose }: { sitter: typeof mockSitters[0];
           </div>
           {sitter.pending && (
             <div className="sm-actions">
-              <button className="sm-btn sm-btn-reject" onClick={() => { alert('已驳回'); onClose() }}><X size={15} /> 驳回申请</button>
-              <button className="sm-btn sm-btn-approve" onClick={() => { alert('已通过审核'); onClose() }}><Check size={15} /> 通过审核</button>
+              <button className="sm-btn sm-btn-reject" onClick={async () => { await api.put('/admin/sitters/' + sitter.id + '/reject'); onClose() }}><X size={15} /> 驳回申请</button>
+              <button className="sm-btn sm-btn-approve" onClick={async () => { await api.put('/admin/sitters/' + sitter.id + '/verify'); onClose() }}><Check size={15} /> 通过审核</button>
             </div>
           )}
         </div>
@@ -75,13 +65,15 @@ function CertBadge({ cert }: { cert: string }) {
 }
 
 export default function SitterManagement() {
+  const [sitters, setSitters] = useState<any[]>([])
+  useEffect(() => { api.get<any[]>('/admin/sitters').then(setSitters) }, [])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
-  const [selected, setSelected] = useState<typeof mockSitters[0] | null>(null)
+  const [selected, setSelected] = useState<any | null>(null)
   const [page, setPage] = useState(1)
 
-  const pending = mockSitters.filter(s => s.status === 'pending')
-  const filtered = mockSitters.filter(s => {
+  const pending = sitters.filter(s => s.status === 'pending')
+  const filtered = sitters.filter(s => {
     if (filter === 'pending' && s.status !== 'pending') return false
     if (filter === 'active' && s.status !== 'active') return false
     if (search && !s.name.includes(search) && !s.id.includes(search) && !s.phone.includes(search)) return false
@@ -95,11 +87,11 @@ export default function SitterManagement() {
   return (
     <div className="sm-page">
       <div className="sm-page-hdr">
-        <div><h1>服务者管理</h1><p className="sm-subtitle">共 {mockSitters.length} 位服务者 · 已通过 {mockSitters.filter(s => s.status === 'active').length} 位</p></div>
+        <div><h1>服务者管理</h1><p className="sm-subtitle">共 {sitters.length} 位服务者 · 已通过 {sitters.filter(s => s.status === 'active').length} 位</p></div>
         <div className="sm-hdr-stats">
-          <div className="sm-hdr-stat"><span className="sm-hdr-num">{mockSitters.length}</span><span>总计</span></div>
+          <div className="sm-hdr-stat"><span className="sm-hdr-num">{sitters.length}</span><span>总计</span></div>
           <div className="sm-hdr-divider" />
-          <div className="sm-hdr-stat"><span className="sm-hdr-num active">{mockSitters.filter(s => s.status === 'active').length}</span><span>已通过</span></div>
+          <div className="sm-hdr-stat"><span className="sm-hdr-num active">{sitters.filter(s => s.status === 'active').length}</span><span>已通过</span></div>
           <div className="sm-hdr-divider" />
           <div className="sm-hdr-stat"><span className="sm-hdr-num pending">{pending.length}</span><span>待审核</span></div>
         </div>

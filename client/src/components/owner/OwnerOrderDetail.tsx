@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Star, MapPin, Clock, ChevronRight, MessageCircle,
   CheckCircle2, Circle, X, Camera, Heart, User, ShieldCheck
 } from 'lucide-react'
+import { api } from '../../utils/api'
 
-type OrderStatus = 'pending_pay' | 'pending_accept' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled'
+type OrderStatus = 'pending_pay' | 'pending_accept' | 'accepted' | 'in_progress' | 'completed' | 'reviewed' | 'cancelled'
 
 interface OrderDetail {
   id: string
@@ -26,33 +27,6 @@ interface OrderDetail {
   timeline: { status: string; label: string; time: string; done: boolean }[]
 }
 
-const mockOrder: OrderDetail = {
-  id: 'ORD-20260528-001',
-  status: 'in_progress',
-  services: [
-    { name: '上门遛狗', duration: '60分钟', price: 79 },
-    { name: '喂食+遛狗组合', duration: '60分钟', price: 99 },
-  ],
-  total: 178,
-  petName: '咪咪',
-  petBreed: '英短蓝猫',
-  petAvatar: '🐱',
-  address: '望京SOHO T3 1808',
-  date: '2024-05-28',
-  time: '10:00-11:00',
-  sitterName: '张阿姨',
-  sitterAvatar: '👩',
-  sitterLevel: '金牌服务者',
-  sitterRating: 4.9,
-  sitterOrders: 328,
-  timeline: [
-    { status: 'paid', label: '支付成功', time: '2024-05-28 08:00', done: true },
-    { status: 'accepted', label: '服务者已接单', time: '2024-05-28 08:30', done: true },
-    { status: 'arrived', label: '服务者已到达', time: '2024-05-28 09:55', done: true },
-    { status: 'started', label: '服务开始', time: '2024-05-28 10:00', done: true },
-  ],
-}
-
 const statusSteps = [
   { key: 'paid', label: '已支付' },
   { key: 'accepted', label: '待接单' },
@@ -62,13 +36,20 @@ const statusSteps = [
 ]
 
 const statusIndex: Record<OrderStatus, number> = {
-  pending_pay: 0, pending_accept: 1, in_progress: 2, completed: 3, reviewed: 4, cancelled: -1,
+  pending_pay: 0, pending_accept: 1, accepted: 2, in_progress: 2, completed: 3, reviewed: 4, cancelled: -1,
+}
+
+const levelLabels: Record<number, string> = {
+  1: '金牌服务者',
+  2: '银牌服务者',
+  3: '铜牌服务者',
 }
 
 export default function OwnerOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const order = mockOrder
+  const [order, setOrder] = useState<OrderDetail | null>(null)
+  const [loading, setLoading] = useState(true)
   const [showReview, setShowReview] = useState(false)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewDims, setReviewDims] = useState({ onTime: 5, attitude: 5, professional: 5 })
@@ -76,22 +57,106 @@ export default function OwnerOrderDetail() {
   const [reviewImgs, setReviewImgs] = useState<string[]>([])
   const [submitted, setSubmitted] = useState(false)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [isAnonymous, setIsAnonymous] = useState(false)
 
-  const currentIdx = statusIndex[order.status]
-  const canCancel = ['pending_pay', 'pending_accept'].includes(order.status)
-  const canPay = order.status === 'pending_pay'
-  const canReview = order.status === 'completed' && !submitted
+  const fetchOrder = async () => {
+    try {
+      const data = await api.get<any>(`/orders/${id}`)
+      const sitterLevelNum = data.sitter?.sitter_profile?.level || 0
+      setOrder({
+        id: data.id,
+        status: data.status,
+        services: data.services || [],
+        total: data.total || 0,
+        petName: data.pets?.[0]?.pet?.name || '',
+        petBreed: data.pets?.[0]?.pet?.breed || '',
+        petAvatar: data.pets?.[0]?.pet?.avatar || '🐱',
+        address: data.address ? `${data.address.address} ${data.address.detail}`.trim() : '',
+        date: data.service_date ? new Date(data.service_date).toLocaleDateString('zh-CN') : '',
+        time: data.service_time || '',
+        sitterName: data.sitter?.name || '',
+        sitterAvatar: data.sitter?.avatar || '👩',
+        sitterLevel: levelLabels[sitterLevelNum] || `Lv.${sitterLevelNum}`,
+        sitterRating: data.sitter?.sitter_profile?.rating || 0,
+        sitterOrders: data.sitter?.sitter_profile?.total_orders || 0,
+        timeline: (data.timeline || []).map((t: any) => ({
+          status: t.status,
+          label: t.label,
+          time: t.created_at ? new Date(t.created_at).toLocaleString('zh-CN') : '',
+          done: true,
+        })),
+      })
+    } catch (err) {
+      console.error('Failed to load order:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const handleSubmitReview = () => {
-    setSubmitted(true)
-    setShowReview(false)
+  useEffect(() => {
+    if (id) fetchOrder()
+  }, [id])
+
+  const currentIdx = order ? statusIndex[order.status] : -1
+  const canCancel = order && ['pending_pay', 'pending_accept'].includes(order.status)
+  const canPay = order?.status === 'pending_pay'
+  const canReview = order?.status === 'completed' && !submitted
+
+  const handlePay = async () => {
+    if (!order || actionLoading) return
+    setActionLoading(true)
+    try {
+      await api.put(`/orders/${order.id}/pay`)
+      await fetchOrder()
+    } catch (err: any) {
+      alert(err.message || '支付失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!order || actionLoading) return
+    setActionLoading(true)
+    try {
+      await api.put(`/orders/${order.id}/cancel`, { reason: '用户取消' })
+      setCancelConfirm(false)
+      await fetchOrder()
+    } catch (err: any) {
+      alert(err.message || '取消失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleSubmitReview = async () => {
+    if (!order || actionLoading) return
+    setActionLoading(true)
+    try {
+      await api.post(`/reviews/orders/${order.id}/review`, {
+        rating: reviewRating,
+        text: reviewText,
+        on_time: reviewDims.onTime,
+        attitude: reviewDims.attitude,
+        professional: reviewDims.professional,
+        is_anonymous: isAnonymous,
+      })
+      setSubmitted(true)
+      setShowReview(false)
+      await fetchOrder()
+    } catch (err: any) {
+      alert(err.message || '提交评价失败')
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   const actionButtons = () => {
     if (canPay) return (
       <>
         <button className="ood-action secondary" onClick={() => setCancelConfirm(true)}>取消订单</button>
-        <button className="ood-action primary" onClick={() => alert('支付成功')}>去支付 ¥{order.total}</button>
+        <button className="ood-action primary" onClick={handlePay} disabled={actionLoading}>去支付 ¥{order?.total}</button>
       </>
     )
     if (canCancel) return (
@@ -100,7 +165,7 @@ export default function OwnerOrderDetail() {
         <button className="ood-action secondary disabled" disabled>等待接单</button>
       </>
     )
-    if (order.status === 'in_progress') return (
+    if (order?.status === 'in_progress') return (
       <button className="ood-action primary" onClick={() => navigate(`/chat/${order.id}`)}>
         <MessageCircle size={16} /> 联系服务者
       </button>
@@ -111,13 +176,21 @@ export default function OwnerOrderDetail() {
         <button className="ood-action primary" onClick={() => setShowReview(true)}>写评价</button>
       </>
     )
-    if (order.status === 'reviewed') return (
+    if (order?.status === 'reviewed') return (
       <button className="ood-action primary" onClick={() => navigate('/booking/new')}>再次预约</button>
     )
-    if (order.status === 'cancelled') return (
+    if (order?.status === 'cancelled') return (
       <button className="ood-action primary" onClick={() => navigate('/booking/new')}>再次预约</button>
     )
     return null
+  }
+
+  if (loading) {
+    return <div className="ood-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>加载中...</div>
+  }
+
+  if (!order) {
+    return <div className="ood-page" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-muted)' }}>订单不存在</div>
   }
 
   return (
@@ -289,7 +362,7 @@ export default function OwnerOrderDetail() {
               </div>
               <div className="ood-review-anon">
                 <label className="ood-toggle">
-                  <input type="checkbox" />
+                  <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} />
                   <span className="ood-toggle-track" />
                   <span>匿名评价</span>
                 </label>
@@ -308,8 +381,8 @@ export default function OwnerOrderDetail() {
             <h3>确认取消订单？</h3>
             <p>取消后可能产生取消费用</p>
             <div className="ood-confirm-btns">
-              <button className="ood-confirm-cancel" onClick={() => setCancelConfirm(false)}>暂不取消</button>
-              <button className="ood-confirm-ok" onClick={() => { setCancelConfirm(false); alert('订单已取消') }}>确认取消</button>
+              <button className="ood-confirm-cancel" onClick={() => setCancelConfirm(false) } disabled={actionLoading}>暂不取消</button>
+              <button className="ood-confirm-ok" onClick={handleCancel} disabled={actionLoading}>{actionLoading ? '取消中...' : '确认取消'}</button>
             </div>
           </div>
         </div>

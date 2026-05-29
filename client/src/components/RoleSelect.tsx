@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PawPrint, ChevronRight, User, Briefcase, Shield, ArrowLeft, ShieldCheck } from 'lucide-react'
-import { UserRole } from '../../utils/auth'
+import { UserRole } from '../utils/auth'
 
 interface RoleSelectProps {
   mode: 'login' | 'register'

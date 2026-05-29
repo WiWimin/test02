@@ -5,7 +5,7 @@ import {
   ShieldCheck, ArrowLeft, CheckCircle2, XCircle,
   MessageCircle, Smartphone, CreditCard, User as UserIcon
 } from 'lucide-react'
-import { login, UserRole } from '../utils/auth'
+import { login, register, UserRole } from '../utils/auth'
 
 const roleLabels: Record<UserRole, string> = {
   owner: '宠物主人',
@@ -190,37 +190,37 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     e.preventDefault()
     if (!validateLogin()) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1200))
-    setLoading(false)
-    const accountId = role === 'owner' ? loginPhone.replace(/\s/g, '') : loginAccount
-    login({
-      id: 'u_' + Date.now(),
-      name: '用户' + accountId.slice(-4),
-      phone: accountId,
-      role,
-      avatar: '',
-    })
-    setToast({ msg: '登录成功，欢迎回来！', type: 'success' })
-    doRedirect()
+    try {
+      const accountId = role === 'owner' ? loginPhone.replace(/\s/g, '') : loginAccount
+      await login(accountId, loginPwd)
+      setToast({ msg: '登录成功，欢迎回来！', type: 'success' })
+      doRedirect()
+    } catch (err: any) {
+      setToast({ msg: err.message || '登录失败', type: 'error' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!validateRegister()) return
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1200))
-    setLoading(false)
-    const mockAccount = 'SC' + Date.now().toString().slice(-8)
-    setAssignedAccount(mockAccount)
-    login({
-      id: 'u_' + Date.now(),
-      name: '用户' + regPhone.slice(-4),
-      phone: regPhone.replace(/\s/g, ''),
-      role,
-      avatar: '',
-    })
-    setToast({ msg: `注册成功！您的账号为：${mockAccount}`, type: 'success' })
-    doRedirect()
+    try {
+      const result = await register({
+        phone: regPhone.replace(/\s/g, ''),
+        password: regPwd,
+        name: '用户' + regPhone.replace(/\s/g, '').slice(-4),
+        role,
+      })
+      if (result.user.account) setAssignedAccount(result.user.account)
+      setToast({ msg: '注册成功！', type: 'success' })
+      doRedirect()
+    } catch (err: any) {
+      setToast({ msg: err.message || '注册失败', type: 'error' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const sendCode = () => {

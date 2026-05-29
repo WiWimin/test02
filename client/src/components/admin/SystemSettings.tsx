@@ -1,12 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Save, Plus, Trash2, Edit3, RefreshCw, ToggleLeft, Info, Users, Settings as SettingsIcon, Percent, Clock, MapPin, DollarSign } from 'lucide-react'
+import { api } from '../../utils/api'
 
 export default function SystemSettings() {
-  const [settings, setSettings] = useState({
-    commissionRate: '15', cancelFreeHours: '24', acceptTimeout: '15',
-    maxDistance: '10', minPayout: '50', serviceStartRadius: '0.5',
-    autoConfirm: true, smsNotify: true, newSitterOpen: true,
-  })
+  const [settings, setSettings] = useState<any>({})
+  useEffect(() => { api.get<any>('/admin/settings').then(setSettings) }, [])
 
   const [admins] = useState([
     { id: 'A-001', name: '超级管理员', account: 'admin@petcare.com', role: '超级管理员', lastLogin: '2026-05-28 09:30', avatar: '👤' },
@@ -35,7 +33,7 @@ export default function SystemSettings() {
     <div className="ss-page">
       <div className="ss-page-hdr">
         <div><h1>系统设置</h1><p className="ss-subtitle">管理平台参数、权限和系统配置</p></div>
-        <button className="ss-save-btn" onClick={() => alert('所有设置已保存！')}><Save size={16} /> 保存全部</button>
+        <button className="ss-save-btn" onClick={async () => { await api.put('/admin/settings', settings); alert('所有设置已保存！') }}><Save size={16} /> 保存全部</button>
       </div>
 
       <div className="ss-card">

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Star, MapPin, ChevronDown, X, SlidersHorizontal, Filter } from 'lucide-react'
+import { api } from '../../utils/api'
 
 interface Sitter {
   id: string
@@ -18,14 +19,13 @@ interface Sitter {
 
 const categories = ['全部', '遛狗', '上门喂猫', '宠物清洁', '宠物医疗', '宠物寄养', '宠物美容', '宠物训练']
 
-const mockSitters: Sitter[] = [
-  { id: 's1', name: '张阿姨', avatar: '👩', bgColor: '#FFF0EB', rating: 4.9, reviews: 328, distance: '1.2km', price: 88, tags: ['遛狗', '喂食', '清洁'], level: '金牌', online: true },
-  { id: 's2', name: '李明', avatar: '👨', bgColor: '#E8F8F4', rating: 4.8, reviews: 215, distance: '2.5km', price: 49, tags: ['上门喂猫', '遛狗'], level: '金牌', online: true },
-  { id: 's3', name: '小王', avatar: '👩', bgColor: '#FFF8E0', rating: 4.9, reviews: 412, distance: '0.8km', price: 69, tags: ['全能服务', '医疗陪护'], level: '金牌', online: false },
-  { id: 's4', name: '赵阿姨', avatar: '👩', bgColor: '#F0E6FF', rating: 4.7, reviews: 156, distance: '3.1km', price: 128, tags: ['宠物医生', '营养配餐'], level: '银牌', online: true },
-  { id: 's5', name: '刘姐', avatar: '👩', bgColor: '#FFE0EC', rating: 4.8, reviews: 89, distance: '0.5km', price: 59, tags: ['遛狗', '喂食'], level: '铜牌', online: true },
-  { id: 's6', name: '陈叔', avatar: '👨', bgColor: '#E0F0FF', rating: 4.6, reviews: 203, distance: '1.8km', price: 79, tags: ['大型犬', '宠物寄养'], level: '银牌', online: false },
-]
+const bgColors = ['#FFF0EB', '#E8F8F4', '#FFF8E0', '#F0E6FF', '#FFE0EC', '#E0F0FF']
+
+const levelLabels: Record<number, string> = {
+  1: '金牌',
+  2: '银牌',
+  3: '铜牌',
+}
 
 const searchHistoryKey = 'petcare_search_history'
 
@@ -41,20 +41,50 @@ export default function OwnerMarket() {
   })
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 500])
   const [minRating, setMinRating] = useState(0)
+  const [sitters, setSitters] = useState<Sitter[]>([])
+  const [loading, setLoading] = useState(true)
   const searchRef = useRef<HTMLInputElement>(null)
 
-  const filtered = mockSitters.filter(s => {
-    if (category !== '全部' && !s.tags.some(t => t.includes(category))) return false
-    if (search && !s.name.includes(search) && !s.tags.some(t => t.includes(search))) return false
-    if (s.price < priceRange[0] || s.price > priceRange[1]) return false
-    if (minRating > 0 && s.rating < minRating) return false
-    return true
-  }).sort((a, b) => {
-    if (sortBy === '距离最近') return parseFloat(a.distance) - parseFloat(b.distance)
-    if (sortBy === '评分最高') return b.rating - a.rating
-    if (sortBy === '价格最低') return a.price - b.price
-    return b.reviews - a.reviews
-  })
+  const fetchSitters = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (category !== '全部') params.set('category', category)
+      if (search) params.set('keyword', search)
+      if (priceRange[0] > 0) params.set('priceMin', String(priceRange[0]))
+      if (priceRange[1] < 500) params.set('priceMax', String(priceRange[1]))
+      if (minRating > 0) params.set('minRating', String(minRating))
+      if (sortBy === '评分最高') params.set('sortBy', 'rating')
+      else if (sortBy === '价格最低') params.set('sortBy', 'price')
+      params.set('pageSize', '50')
+
+      const res = await api.get<{ items: any[] }>(`/sitters?${params.toString()}`)
+      const items = (res as any)?.items || []
+      setSitters(items.map((s: any, i: number) => ({
+        id: s.id,
+        name: s.name || '',
+        avatar: s.avatar || '👩',
+        bgColor: bgColors[i % bgColors.length],
+        rating: s.rating || 0,
+        reviews: s.reviews || 0,
+        distance: '',
+        price: s.price || 0,
+        tags: s.tags || [],
+        level: levelLabels[s.level] || `Lv.${s.level}`,
+        online: s.online || false,
+      })))
+    } catch (err) {
+      console.error('Failed to load sitters:', err)
+      setSitters([])
+    } finally {
+      setLoading(false)
+    }
+  }, [category, search, priceRange, minRating, sortBy])
+
+  useEffect(() => {
+    const timer = setTimeout(fetchSitters, 300)
+    return () => clearTimeout(timer)
+  }, [fetchSitters])
 
   const doSearch = (val: string) => {
     setSearch(val)
@@ -145,7 +175,7 @@ export default function OwnerMarket() {
 
       {/* Sort Bar */}
       <div className="om-sort-bar">
-        <span className="om-sort-result">共 {filtered.length} 位服务者</span>
+        <span className="om-sort-result">共 {sitters.length} 位服务者</span>
         <div className="om-sort-options">
           {['综合', '距离最近', '评分最高', '价格最低'].map(s => (
             <button key={s} className={`om-sort-btn ${sortBy === s ? 'active' : ''}`} onClick={() => setSortBy(s)}>{s}</button>
@@ -154,7 +184,12 @@ export default function OwnerMarket() {
       </div>
 
       {/* Sitter Cards */}
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="om-empty">
+          <Search size={40} />
+          <p>加载中...</p>
+        </div>
+      ) : sitters.length === 0 ? (
         <div className="om-empty">
           <Search size={40} />
           <p>换个关键词试试</p>
@@ -162,7 +197,7 @@ export default function OwnerMarket() {
         </div>
       ) : (
         <div className="om-grid">
-          {filtered.map(sitter => (
+          {sitters.map(sitter => (
             <div key={sitter.id} className="om-card" onClick={() => navigate(`/services/${sitter.id}`)}>
               <div className="om-card-top">
                 <div className="om-card-avatar" style={{ background: sitter.bgColor }}>
@@ -197,7 +232,7 @@ export default function OwnerMarket() {
       )}
 
       {/* Load More */}
-      {filtered.length > 0 && (
+      {sitters.length > 0 && (
         <div className="om-load-more">
           <button className="om-load-btn">加载更多</button>
         </div>

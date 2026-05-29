@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Info, LogOut, ChevronRight } from 'lucide-react'
+import { api } from '../../utils/api'
 
 export default function Settings() {
   const navigate = useNavigate()
@@ -84,7 +85,7 @@ export default function Settings() {
         </div>
       </div>
 
-      <button className="st-logout-btn" onClick={() => navigate('/')}>
+      <button className="st-logout-btn" onClick={() => { localStorage.removeItem('token'); navigate('/login') }}>
         <LogOut size={16} /> 退出登录
       </button>
 
