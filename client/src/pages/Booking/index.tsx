@@ -4,8 +4,8 @@ import {
   ArrowLeft, Check, MapPin, Plus, ChevronDown,
   CreditCard, ShieldCheck, Clock, Home, Building, ChevronRight
 } from 'lucide-react'
-import { api } from '../utils/api'
-import { isLoggedIn } from '../utils/auth'
+import { api } from '../../utils/api'
+import { isLoggedIn } from '../../utils/auth'
 
 const steps = [
   { num: 1, label: '选择宠物' },

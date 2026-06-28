@@ -5,7 +5,7 @@ import {
   MessageCircle, XCircle, Star, RotateCcw, Trash2,
   AlertCircle, CreditCard, ChevronDown
 } from 'lucide-react'
-import { api } from '../utils/api'
+import { api } from '../../utils/api'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   pending_pay:   { label: '待支付', color: '#D48806', bg: '#FFFBEB' },
