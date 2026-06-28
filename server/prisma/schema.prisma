@@ -48,6 +48,7 @@ model SitterProfile {
   wechat        String?
   rating        Float   @default(0)
   total_orders  Int     @default(0)
+  balance       Float   @default(0)
   max_distance  Int     @default(5)
   workday_start String  @default("09:00")
   workday_end   String  @default("20:00")

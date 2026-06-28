@@ -146,11 +146,10 @@ export async function getSitterReviews(req: AuthRequest, res: Response, next: Ne
 
 export async function toggleFavorite(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const existing = await prisma.favorite.findUnique({
-      where: { owner_id_sitter_id: { owner_id: req.user!.id, sitter_id: req.params.id } },
+    const deleted = await prisma.favorite.deleteMany({
+      where: { owner_id: req.user!.id, sitter_id: req.params.id },
     })
-    if (existing) {
-      await prisma.favorite.delete({ where: { id: existing.id } })
+    if (deleted.count > 0) {
       return success(res, { favorited: false })
     }
     await prisma.favorite.create({ data: { owner_id: req.user!.id, sitter_id: req.params.id } })
