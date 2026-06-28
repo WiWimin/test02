@@ -67,6 +67,8 @@ model SitterProfile {
   areas    SitterArea[]
   certs    SitterCert[]
 
+  @@index([status, rating])
+  @@index([status])
   @@map("sitter_profiles")
 }
 
@@ -190,8 +192,9 @@ model Order {
   conversation Conversation?
   session     ServiceSession?
 
-  @@index([owner_id])
-  @@index([sitter_id])
+  @@index([owner_id, status])
+  @@index([sitter_id, status])
+  @@index([created_at])
   @@index([order_no])
   @@map("orders")
 }
