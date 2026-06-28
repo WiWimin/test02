@@ -4,8 +4,8 @@ import {
   ArrowLeft, Phone, MoreVertical, Send, Paperclip, Image as ImageIcon,
   Smile, Check, CheckCheck, Clock, ChevronDown
 } from 'lucide-react'
-import { api } from '../utils/api'
-import { getCurrentUser } from '../utils/auth'
+import { api } from '../../utils/api'
+import { getCurrentUser } from '../../utils/auth'
 import { io, Socket } from 'socket.io-client'
 
 type MessageSender = 'me' | 'other' | 'system'

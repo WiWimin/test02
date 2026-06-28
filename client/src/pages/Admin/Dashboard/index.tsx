@@ -5,14 +5,14 @@ import {
   Menu, Star, TrendingUp, TrendingDown,
   AlertCircle, ArrowUpRight
 } from 'lucide-react'
-import { api } from '../utils/api'
-import UserManagement from './admin/UserManagement'
-import SitterManagement from './admin/SitterManagement'
-import OrderManagement from './admin/OrderManagement'
-import FinanceStats from './admin/FinanceStats'
-import ContentManagement from './admin/ContentManagement'
-import SystemSettings from './admin/SystemSettings'
-import ErrorBoundary from './ErrorBoundary'
+import { api } from '../../../utils/api'
+import UserManagement from '../../../components/admin/UserManagement'
+import SitterManagement from '../../../components/admin/SitterManagement'
+import OrderManagement from '../../../components/admin/OrderManagement'
+import FinanceStats from '../../../components/admin/FinanceStats'
+import ContentManagement from '../../../components/admin/ContentManagement'
+import SystemSettings from '../../../components/admin/SystemSettings'
+import ErrorBoundary from '../../../components/ErrorBoundary'
 
 /* ── Static Config ── */
 
