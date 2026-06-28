@@ -1,11 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Header from './components/Header'
-import HeroSection from './components/HeroSection'
-import ServiceCategories from './components/ServiceCategories'
-import PopularSitters from './components/PopularSitters'
-import Guarantees from './components/Guarantees'
-import Testimonials from './components/Testimonials'
-import Footer from './components/Footer'
+import { Routes, Route } from 'react-router-dom'
 import ServiceDetail from './components/ServiceDetail'
 import NewBooking from './components/NewBooking'
 import OrderList from './components/OrderList'
@@ -33,34 +26,8 @@ import OwnerMarket from './components/owner/OwnerMarket'
 import OwnerOrderDetail from './components/owner/OwnerOrderDetail'
 import OwnerAddresses from './components/owner/OwnerAddresses'
 import RoleSelect from './components/RoleSelect'
-import RegisterPrompt from './components/RegisterPrompt'
-
-function ProtectedRoute({ children, roles }: { children: JSX.Element; roles?: string[] }) {
-  const token = localStorage.getItem('petcare_token')
-  if (!token) return <Navigate to="/login" replace />
-  if (roles) {
-    const cached = (() => { try { return JSON.parse(localStorage.getItem('petcare_user') || 'null') } catch { return null } })()
-    if (!cached || !roles.includes(cached.role)) return <Navigate to="/" replace />
-  }
-  return children
-}
-
-function HomePage() {
-  return (
-    <>
-      <Header />
-      <main>
-        <HeroSection />
-        <ServiceCategories />
-        <PopularSitters />
-        <Guarantees />
-        <Testimonials />
-        <RegisterPrompt />
-      </main>
-      <Footer />
-    </>
-  )
-}
+import ProtectedRoute from './router/ProtectedRoute'
+import HomePage from './pages/Home'
 
 function App() {
   return (
