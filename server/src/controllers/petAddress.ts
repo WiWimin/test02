@@ -44,10 +44,12 @@ export async function listAddresses(req: AuthRequest, res: Response, next: NextF
 
 export async function createAddress(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    if (req.body.is_default) {
-      await prisma.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } })
-    }
-    const address = await prisma.address.create({ data: { ...req.body, user_id: req.user!.id } })
+    const address = req.body.is_default
+      ? await prisma.$transaction(async (tx) => {
+          await tx.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } })
+          return tx.address.create({ data: { ...req.body, user_id: req.user!.id } })
+        })
+      : await prisma.address.create({ data: { ...req.body, user_id: req.user!.id } })
     success(res, address, 201)
   } catch (err) { next(err) }
 }
@@ -56,10 +58,12 @@ export async function updateAddress(req: AuthRequest, res: Response, next: NextF
   try {
     const existing = await prisma.address.findFirst({ where: { id: req.params.id, user_id: req.user!.id } })
     if (!existing) return fail(res, 'NOT_FOUND', '地址不存在', 404)
-    if (req.body.is_default) {
-      await prisma.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } })
-    }
-    const address = await prisma.address.update({ where: { id: req.params.id }, data: req.body })
+    const address = req.body.is_default
+      ? await prisma.$transaction(async (tx) => {
+          await tx.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } })
+          return tx.address.update({ where: { id: req.params.id }, data: req.body })
+        })
+      : await prisma.address.update({ where: { id: req.params.id }, data: req.body })
     success(res, address)
   } catch (err) { next(err) }
 }
@@ -75,8 +79,10 @@ export async function deleteAddress(req: AuthRequest, res: Response, next: NextF
 
 export async function setDefaultAddress(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    await prisma.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } })
-    await prisma.address.update({ where: { id: req.params.id }, data: { is_default: true } })
+    await prisma.$transaction([
+      prisma.address.updateMany({ where: { user_id: req.user!.id }, data: { is_default: false } }),
+      prisma.address.update({ where: { id: req.params.id }, data: { is_default: true } }),
+    ])
     success(res, { message: '已设为默认' })
   } catch (err) { next(err) }
 }

@@ -20,16 +20,20 @@ import chatRoutes from './routes/chat'
 import walletRoutes from './routes/wallet'
 import adminRoutes from './routes/admin'
 import uploadRoutes from './routes/upload'
+import contentRoutes from './routes/content'
 
 const app = express()
 const http = createServer(app)
+http.maxHeadersCount = 0
 const io = new Server(http, {
   cors: { origin: env.CORS_ORIGIN, credentials: true },
 })
 
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }))
 app.use(express.json())
-app.use(morgan('dev'))
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'))
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -46,6 +50,7 @@ app.use('/api/reviews', reviewRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/wallet', walletRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/content', contentRoutes)
 app.use('/api/upload', uploadRoutes)
 app.use('/uploads', express.static('uploads'))
 
@@ -54,6 +59,9 @@ app.use(errorHandler)
 
 // Socket.IO
 setupSocket(io)
+
+http.keepAliveTimeout = 15000
+http.headersTimeout = 20000
 
 http.listen(env.PORT, () => {
   console.log(`🚀 PetCare API Server running on http://localhost:${env.PORT}`)

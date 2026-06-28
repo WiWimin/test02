@@ -5,13 +5,18 @@ import prisma from '../utils/prisma'
 
 export async function createReview(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, owner_id: true, sitter_id: true, status: true, order_no: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.owner_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权评价', 403)
-    if (order.status !== 'completed') return fail(res, 'INVALID_STATUS', '订单未完成，不可评价')
 
-    const existing = await prisma.review.findUnique({ where: { order_id: order.id } })
-    if (existing) return fail(res, 'ALREADY_REVIEWED', '已评价过此订单')
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: 'completed' },
+      data: { status: 'reviewed' },
+    })
+    if (updated.count === 0) return fail(res, 'ALREADY_REVIEWED', '已评价过此订单或订单状态异常')
 
     const { rating, on_time, attitude, professional, text, is_anonymous, images } = req.body
 
@@ -27,11 +32,9 @@ export async function createReview(req: AuthRequest, res: Response, next: NextFu
       },
     })
 
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'reviewed' } })
     await prisma.orderTimeline.create({ data: { order_id: order.id, status: 'reviewed', label: '已评价' } })
 
     const stats = await prisma.review.aggregate({ where: { sitter_id: order.sitter_id }, _avg: { rating: true } })
-    const count = await prisma.review.count({ where: { sitter_id: order.sitter_id } })
     await prisma.sitterProfile.update({
       where: { user_id: order.sitter_id },
       data: { rating: stats._avg.rating || 0 },

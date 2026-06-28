@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express'
 import { AuthRequest } from '../middleware/auth'
 import { success, fail } from '../utils/response'
 import prisma from '../utils/prisma'
+import cache from '../utils/cache'
 
 export async function getDashboard(req: AuthRequest, res: Response, next: NextFunction) {
   try {
@@ -249,52 +250,52 @@ export async function deleteAdmin(req: AuthRequest, res: Response, next: NextFun
 }
 
 export async function listBanners(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const items = await prisma.banner.findMany({ orderBy: { sort: 'asc' } }); success(res, items) }
+  try { const cached = cache.get('banners'); if (cached) return success(res, cached as any); const items = await prisma.banner.findMany({ orderBy: { sort: 'asc' } }); cache.set('banners', items, 300); success(res, items) }
   catch (err) { next(err) }
 }
 export async function createBanner(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.banner.create({ data: req.body }); success(res, item, 201) }
+  try { const item = await prisma.banner.create({ data: req.body }); cache.del('banners'); success(res, item, 201) }
   catch (err) { next(err) }
 }
 export async function updateBanner(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.banner.update({ where: { id: req.params.id }, data: req.body }); success(res, item) }
+  try { const item = await prisma.banner.update({ where: { id: req.params.id }, data: req.body }); cache.del('banners'); success(res, item) }
   catch (err) { next(err) }
 }
 export async function deleteBanner(req: AuthRequest, res: Response, next: NextFunction) {
-  try { await prisma.banner.delete({ where: { id: req.params.id } }); success(res, { message: '已删除' }) }
+  try { await prisma.banner.delete({ where: { id: req.params.id } }); cache.del('banners'); success(res, { message: '已删除' }) }
   catch (err) { next(err) }
 }
 
 export async function listAnnouncements(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const items = await prisma.announcement.findMany({ orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }] }); success(res, items) }
+  try { const cached = cache.get('announcements'); if (cached) return success(res, cached as any); const items = await prisma.announcement.findMany({ orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }] }); cache.set('announcements', items, 300); success(res, items) }
   catch (err) { next(err) }
 }
 export async function createAnnouncement(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.announcement.create({ data: req.body }); success(res, item, 201) }
+  try { const item = await prisma.announcement.create({ data: req.body }); cache.del('announcements'); success(res, item, 201) }
   catch (err) { next(err) }
 }
 export async function updateAnnouncement(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.announcement.update({ where: { id: req.params.id }, data: req.body }); success(res, item) }
+  try { const item = await prisma.announcement.update({ where: { id: req.params.id }, data: req.body }); cache.del('announcements'); success(res, item) }
   catch (err) { next(err) }
 }
 export async function deleteAnnouncement(req: AuthRequest, res: Response, next: NextFunction) {
-  try { await prisma.announcement.delete({ where: { id: req.params.id } }); success(res, { message: '已删除' }) }
+  try { await prisma.announcement.delete({ where: { id: req.params.id } }); cache.del('announcements'); success(res, { message: '已删除' }) }
   catch (err) { next(err) }
 }
 
 export async function listFaqs(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const items = await prisma.faq.findMany({ where: { status: 'published' }, orderBy: { sort: 'asc' } }); success(res, items) }
+  try { const cached = cache.get('faqs'); if (cached) return success(res, cached as any); const items = await prisma.faq.findMany({ where: { status: 'published' }, orderBy: { sort: 'asc' } }); cache.set('faqs', items, 300); success(res, items) }
   catch (err) { next(err) }
 }
 export async function createFaq(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.faq.create({ data: req.body }); success(res, item, 201) }
+  try { const item = await prisma.faq.create({ data: req.body }); cache.del('faqs'); success(res, item, 201) }
   catch (err) { next(err) }
 }
 export async function updateFaq(req: AuthRequest, res: Response, next: NextFunction) {
-  try { const item = await prisma.faq.update({ where: { id: req.params.id }, data: req.body }); success(res, item) }
+  try { const item = await prisma.faq.update({ where: { id: req.params.id }, data: req.body }); cache.del('faqs'); success(res, item) }
   catch (err) { next(err) }
 }
 export async function deleteFaq(req: AuthRequest, res: Response, next: NextFunction) {
-  try { await prisma.faq.delete({ where: { id: req.params.id } }); success(res, { message: '已删除' }) }
+  try { await prisma.faq.delete({ where: { id: req.params.id } }); cache.del('faqs'); success(res, { message: '已删除' }) }
   catch (err) { next(err) }
 }

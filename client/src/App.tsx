@@ -1,39 +1,41 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import Header from './components/Header'
-import HeroSection from './components/HeroSection'
-import ServiceCategories from './components/ServiceCategories'
-import PopularSitters from './components/PopularSitters'
-import Guarantees from './components/Guarantees'
-import Testimonials from './components/Testimonials'
-import Footer from './components/Footer'
-import ServiceDetail from './components/ServiceDetail'
-import NewBooking from './components/NewBooking'
-import OrderList from './components/OrderList'
-import AuthPage from './components/AuthPage'
-import Chat from './components/Chat'
-import AdminDashboard from './components/AdminDashboard'
-import GuaranteePage from './components/GuaranteePage'
-import SitterLayout from './components/sitter/SitterLayout'
-import SitterApplication from './components/sitter/SitterApplication'
-import Dashboard from './components/sitter/Dashboard'
-import SitterOrders from './components/sitter/SitterOrders'
-import SitterOrderDetail from './components/sitter/SitterOrderDetail'
-import MyServices from './components/sitter/MyServices'
-import Wallet from './components/sitter/Wallet'
-import Schedule from './components/sitter/Schedule'
-import Profile from './components/sitter/Profile'
-import Settings from './components/sitter/Settings'
-import OwnerLayout from './components/owner/OwnerLayout'
-import OwnerHome from './components/owner/OwnerHome'
-import OwnerOrders from './components/owner/OwnerOrders'
-import OwnerPets from './components/owner/OwnerPets'
-import OwnerFavorites from './components/owner/OwnerFavorites'
-import OwnerProfile from './components/owner/OwnerProfile'
-import OwnerMarket from './components/owner/OwnerMarket'
-import OwnerOrderDetail from './components/owner/OwnerOrderDetail'
-import OwnerAddresses from './components/owner/OwnerAddresses'
-import RoleSelect from './components/RoleSelect'
-import RegisterPrompt from './components/RegisterPrompt'
+
+const Header = lazy(() => import('./components/Header'))
+const HeroSection = lazy(() => import('./components/HeroSection'))
+const ServiceCategories = lazy(() => import('./components/ServiceCategories'))
+const PopularSitters = lazy(() => import('./components/PopularSitters'))
+const Guarantees = lazy(() => import('./components/Guarantees'))
+const Testimonials = lazy(() => import('./components/Testimonials'))
+const Footer = lazy(() => import('./components/Footer'))
+const ServiceDetail = lazy(() => import('./components/ServiceDetail'))
+const NewBooking = lazy(() => import('./components/NewBooking'))
+const OrderList = lazy(() => import('./components/OrderList'))
+const AuthPage = lazy(() => import('./components/AuthPage'))
+const Chat = lazy(() => import('./components/Chat'))
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
+const GuaranteePage = lazy(() => import('./components/GuaranteePage'))
+const SitterLayout = lazy(() => import('./components/sitter/SitterLayout'))
+const SitterApplication = lazy(() => import('./components/sitter/SitterApplication'))
+const Dashboard = lazy(() => import('./components/sitter/Dashboard'))
+const SitterOrders = lazy(() => import('./components/sitter/SitterOrders'))
+const SitterOrderDetail = lazy(() => import('./components/sitter/SitterOrderDetail'))
+const MyServices = lazy(() => import('./components/sitter/MyServices'))
+const Wallet = lazy(() => import('./components/sitter/Wallet'))
+const Schedule = lazy(() => import('./components/sitter/Schedule'))
+const Profile = lazy(() => import('./components/sitter/Profile'))
+const Settings = lazy(() => import('./components/sitter/Settings'))
+const OwnerLayout = lazy(() => import('./components/owner/OwnerLayout'))
+const OwnerHome = lazy(() => import('./components/owner/OwnerHome'))
+const OwnerOrders = lazy(() => import('./components/owner/OwnerOrders'))
+const OwnerPets = lazy(() => import('./components/owner/OwnerPets'))
+const OwnerFavorites = lazy(() => import('./components/owner/OwnerFavorites'))
+const OwnerProfile = lazy(() => import('./components/owner/OwnerProfile'))
+const OwnerMarket = lazy(() => import('./components/owner/OwnerMarket'))
+const OwnerOrderDetail = lazy(() => import('./components/owner/OwnerOrderDetail'))
+const OwnerAddresses = lazy(() => import('./components/owner/OwnerAddresses'))
+const RoleSelect = lazy(() => import('./components/RoleSelect'))
+const RegisterPrompt = lazy(() => import('./components/RegisterPrompt'))
 
 function ProtectedRoute({ children, roles }: { children: JSX.Element; roles?: string[] }) {
   const token = localStorage.getItem('petcare_token')
@@ -65,6 +67,7 @@ function HomePage() {
 function App() {
   return (
     <div className="app">
+      <Suspense fallback={<div className="loading">加载中...</div>}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/services/:id" element={<ServiceDetail />} />
@@ -99,6 +102,7 @@ function App() {
           <Route path="addresses" element={<OwnerAddresses />} />
         </Route>
       </Routes>
+      </Suspense>
     </div>
   )
 }

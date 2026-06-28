@@ -3,23 +3,6 @@ import { AuthRequest } from '../middleware/auth'
 import { success, fail } from '../utils/response'
 import prisma from '../utils/prisma'
 
-const statusTransitions: Record<string, string[]> = {
-  pending_pay: ['cancelled', 'pending_accept'],
-  pending_accept: ['accepted', 'cancelled'],
-  accepted: ['in_progress', 'cancelled'],
-  in_progress: ['completed'],
-  completed: ['reviewed', 'refunding'],
-  refunding: ['refunded', 'disputed'],
-  cancelled: [],
-  reviewed: [],
-  disputed: [],
-  refunded: [],
-}
-
-function canTransition(from: string, to: string): boolean {
-  return (statusTransitions[from] || []).includes(to)
-}
-
 async function addTimeline(orderId: string, status: string, label: string) {
   await prisma.orderTimeline.create({ data: { order_id: orderId, status, label } })
 }
@@ -42,8 +25,7 @@ export async function createOrder(req: AuthRequest, res: Response, next: NextFun
     const total = services.reduce((sum, s) => sum + s.price, 0)
 
     const order = await prisma.$transaction(async (tx) => {
-      const count = await tx.order.count()
-      const order_no = `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(count + 1).padStart(4, '0')}`
+      const order_no = `ORD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
 
       const config = await tx.systemConfig.findFirst()
       const acceptTimeout = config?.accept_timeout || 15
@@ -136,12 +118,19 @@ export async function getOrderDetail(req: AuthRequest, res: Response, next: Next
 
 export async function payOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, owner_id: true, status: true, total: true, order_no: true, sitter_id: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.owner_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权操作', 403)
-    if (!canTransition(order.status, 'pending_accept')) return fail(res, 'INVALID_STATUS', '当前状态不可支付')
 
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'pending_accept', paid_at: new Date() } })
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: 'pending_pay' },
+      data: { status: 'pending_accept', paid_at: new Date() },
+    })
+    if (updated.count === 0) return fail(res, 'CONFLICT', '订单状态已变更，请刷新重试')
+
     await prisma.payment.create({ data: { order_id: order.id, amount: order.total, status: 'success', paid_at: new Date() } })
     await addTimeline(order.id, 'paid', '支付成功')
 
@@ -153,13 +142,20 @@ export async function payOrder(req: AuthRequest, res: Response, next: NextFuncti
 
 export async function cancelOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, owner_id: true, sitter_id: true, status: true, order_no: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.owner_id !== req.user!.id && order.sitter_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权操作', 403)
-    if (!canTransition(order.status, 'cancelled')) return fail(res, 'INVALID_STATUS', '当前状态不可取消')
 
     const { reason } = req.body || {}
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'cancelled', cancel_reason: reason || '用户取消' } })
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: { in: ['pending_pay', 'pending_accept', 'accepted'] } },
+      data: { status: 'cancelled', cancel_reason: reason || '用户取消' },
+    })
+    if (updated.count === 0) return fail(res, 'CONFLICT', '订单状态已变更，无法取消')
+
     await addTimeline(order.id, 'cancelled', `订单已取消${reason ? `：${reason}` : ''}`)
 
     success(res, { message: '订单已取消' })
@@ -168,17 +164,28 @@ export async function cancelOrder(req: AuthRequest, res: Response, next: NextFun
 
 export async function acceptOrder(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, sitter_id: true, status: true, accept_deadline: true, order_no: true, owner_id: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.sitter_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权操作', 403)
-    if (!canTransition(order.status, 'accepted')) return fail(res, 'INVALID_STATUS', '当前状态不可接单')
 
+    const config = await prisma.systemConfig.findFirst()
     if (order.accept_deadline && new Date() > order.accept_deadline) {
-      await prisma.order.update({ where: { id: order.id }, data: { status: 'cancelled', cancel_reason: '接单超时' } })
+      await prisma.order.updateMany({
+        where: { id: order.id, status: 'pending_accept' },
+        data: { status: 'cancelled', cancel_reason: '接单超时' },
+      })
       return fail(res, 'TIMEOUT', '接单超时，订单已自动取消', 400)
     }
 
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'accepted', accepted_at: new Date() } })
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: 'pending_accept' },
+      data: { status: 'accepted', accepted_at: new Date() },
+    })
+    if (updated.count === 0) return fail(res, 'CONFLICT', '订单状态已变更，请刷新')
+
     await addTimeline(order.id, 'accepted', '服务者已接单')
 
     await prisma.notification.create({ data: { user_id: order.owner_id, type: 'order_accepted', title: '已接单', content: `${req.user!.name} 已接单`, link: `/home/owner/orders/${order.id}` } })
@@ -189,13 +196,20 @@ export async function acceptOrder(req: AuthRequest, res: Response, next: NextFun
 
 export async function startService(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, sitter_id: true, status: true, order_no: true, owner_id: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.sitter_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权操作', 403)
-    if (!canTransition(order.status, 'in_progress')) return fail(res, 'INVALID_STATUS', '当前状态不可开始服务')
+
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: 'accepted' },
+      data: { status: 'in_progress', started_at: new Date() },
+    })
+    if (updated.count === 0) return fail(res, 'CONFLICT', '订单状态已变更，请刷新')
 
     const { lat, lng } = req.body || {}
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'in_progress', started_at: new Date() } })
     await prisma.serviceSession.create({ data: { order_id: order.id, start_lat: lat || null, start_lng: lng || null, start_at: new Date() } })
     await addTimeline(order.id, 'started', '服务开始')
 
@@ -207,21 +221,31 @@ export async function startService(req: AuthRequest, res: Response, next: NextFu
 
 export async function completeService(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const order = await prisma.order.findUnique({ where: { id: req.params.id } })
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, sitter_id: true, status: true, total: true, order_no: true, owner_id: true }
+    })
     if (!order) return fail(res, 'NOT_FOUND', '订单不存在', 404)
     if (order.sitter_id !== req.user!.id) return fail(res, 'FORBIDDEN', '无权操作', 403)
-    if (!canTransition(order.status, 'completed')) return fail(res, 'INVALID_STATUS', '当前状态不可完成')
 
-    await prisma.order.update({ where: { id: order.id }, data: { status: 'completed', completed_at: new Date() } })
-    await prisma.serviceSession.updateMany({ where: { order_id: order.id }, data: { end_at: new Date() } })
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, status: 'in_progress' },
+      data: { status: 'completed', completed_at: new Date() },
+    })
+    if (updated.count === 0) return fail(res, 'CONFLICT', '订单状态已变更，请刷新')
+
+    await prisma.serviceSession.updateMany({ where: { order_id: order.id, end_at: null }, data: { end_at: new Date() } })
     await addTimeline(order.id, 'completed', '服务已完成')
-
-    await prisma.sitterProfile.update({ where: { user_id: order.sitter_id }, data: { total_orders: { increment: 1 } } })
 
     const config = await prisma.systemConfig.findFirst()
     const rate = config?.commission_rate || 15
     const commission = order.total * rate / 100
-    await prisma.transaction.create({ data: { sitter_id: order.sitter_id, order_id: order.id, amount: order.total, commission, payout: order.total - commission, rate, settled: true } })
+    const payout = order.total - commission
+
+    await prisma.$transaction([
+      prisma.sitterProfile.update({ where: { user_id: order.sitter_id }, data: { total_orders: { increment: 1 }, balance: { increment: payout } } }),
+      prisma.transaction.create({ data: { sitter_id: order.sitter_id, order_id: order.id, amount: order.total, commission, payout, rate, settled: true } }),
+    ])
 
     await prisma.notification.create({ data: { user_id: order.owner_id, type: 'service_completed', title: '服务已完成', content: `订单 #${order.order_no} 已完成，去评价吧`, link: `/home/owner/orders/${order.id}` } })
 

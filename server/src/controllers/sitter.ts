@@ -2,52 +2,40 @@ import { Response, NextFunction } from 'express'
 import { AuthRequest } from '../middleware/auth'
 import { success, fail } from '../utils/response'
 import prisma from '../utils/prisma'
+import cache from '../utils/cache'
 
 export async function listSitters(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { category, keyword, priceMin, priceMax, minRating, sortBy, page = '1', pageSize = '20' } = req.query as any
     const p = parseInt(page), ps = parseInt(pageSize)
+
+    const cacheKey = `sitters:${JSON.stringify(req.query)}`
+    const cached = cache.get(cacheKey)
+    if (cached) return success(res, cached as any)
+
     const where: any = { status: 'active' }
+    if (minRating) where.rating = { gte: parseFloat(minRating) }
+    if (keyword) where.user = { name: { contains: keyword } }
 
-    if (category && category !== '全部') {
-      where.services = { some: { category, status: 'active' } }
-    }
+    const orderBy: any = sortBy === 'rating' ? { rating: 'desc' as const } : { total_orders: 'desc' as const }
 
-    let sitters = await prisma.sitterProfile.findMany({
-      where,
-      include: {
-        user: { select: { id: true, name: true, avatar: true } },
-        services: { where: { status: 'active' }, select: { id: true, name: true, price: true, duration: true, icon: true, category: true } },
-        certs: { where: { status: 'verified' }, select: { label: true } },
-      },
-    })
+    const [sitters, total] = await Promise.all([
+      prisma.sitterProfile.findMany({
+        where,
+        orderBy,
+        skip: (p - 1) * ps,
+        take: ps,
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          services: { where: { status: 'active' }, select: { id: true, name: true, price: true, duration: true, icon: true, category: true } },
+          certs: { where: { status: 'verified' }, select: { label: true } },
+        },
+      }),
+      prisma.sitterProfile.count({ where }),
+    ])
 
-    sitters = sitters.filter(s => {
-      if (keyword) {
-        const kw = keyword.toLowerCase()
-        const nameMatch = s.user.name.toLowerCase().includes(kw)
-        const tagMatch = s.services.some(svc => svc.name.toLowerCase().includes(kw))
-        if (!nameMatch && !tagMatch) return false
-      }
-      if (priceMin || priceMax) {
-        const minPrice = s.services.length > 0 ? Math.min(...s.services.map(sv => sv.price)) : 0
-        if (priceMin && minPrice < parseFloat(priceMin)) return false
-        if (priceMax && minPrice > parseFloat(priceMax)) return false
-      }
-      if (minRating && s.rating < parseFloat(minRating)) return false
-      return true
-    })
-
-    const total = sitters.length
-
-    if (sortBy === 'price') sitters.sort((a, b) => (Math.min(...a.services.map(s => s.price)) || 0) - (Math.min(...b.services.map(s => s.price)) || 0))
-    else if (sortBy === 'rating') sitters.sort((a, b) => b.rating - a.rating)
-    else sitters.sort((a, b) => (b.total_orders || 0) - (a.total_orders || 0))
-
-    const paged = sitters.slice((p - 1) * ps, p * ps)
-
-    success(res, {
-      items: paged.map(s => ({
+    const result = {
+      items: sitters.map(s => ({
         id: s.user.id,
         name: s.user.name,
         avatar: s.user.avatar,
@@ -60,12 +48,19 @@ export async function listSitters(req: AuthRequest, res: Response, next: NextFun
         badges: s.certs.map(c => c.label),
       })),
       total, page: p, pageSize: ps,
-    })
+    }
+
+    cache.set(cacheKey, result, 10)
+    success(res, result)
   } catch (err) { next(err) }
 }
 
 export async function getSitterDetail(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const cacheKey = `sitter:${req.params.id}`
+    const cached = cache.get(cacheKey)
+    if (cached) return success(res, cached as any)
+
     const sitter = await prisma.user.findUnique({
       where: { id: req.params.id },
       include: {
@@ -87,7 +82,7 @@ export async function getSitterDetail(req: AuthRequest, res: Response, next: Nex
       include: { owner: { select: { name: true, avatar: true } } },
     })
 
-    success(res, {
+    const result = {
       id: sitter.id,
       name: sitter.name,
       avatar: sitter.avatar,
@@ -107,7 +102,10 @@ export async function getSitterDetail(req: AuthRequest, res: Response, next: Nex
         date: r.created_at.toISOString().slice(0, 10),
         images: r.images ? r.images.split(',').filter(Boolean).length : 0,
       })),
-    })
+    }
+
+    cache.set(cacheKey, result, 30)
+    success(res, result)
   } catch (err) { next(err) }
 }
 
@@ -146,11 +144,10 @@ export async function getSitterReviews(req: AuthRequest, res: Response, next: Ne
 
 export async function toggleFavorite(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const existing = await prisma.favorite.findUnique({
-      where: { owner_id_sitter_id: { owner_id: req.user!.id, sitter_id: req.params.id } },
+    const deleted = await prisma.favorite.deleteMany({
+      where: { owner_id: req.user!.id, sitter_id: req.params.id },
     })
-    if (existing) {
-      await prisma.favorite.delete({ where: { id: existing.id } })
+    if (deleted.count > 0) {
       return success(res, { favorited: false })
     }
     await prisma.favorite.create({ data: { owner_id: req.user!.id, sitter_id: req.params.id } })

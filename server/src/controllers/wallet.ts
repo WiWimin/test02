@@ -9,15 +9,14 @@ export async function getWalletStats(req: AuthRequest, res: Response, next: Next
     const weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - weekStart.getDay())
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
 
-    const [todayTx, weekTx, monthTx, allTx, todayCount] = await Promise.all([
+    const profile = await prisma.sitterProfile.findUnique({ where: { user_id: req.user!.id } })
+
+    const [todayTx, weekTx, monthTx, todayCount] = await Promise.all([
       prisma.transaction.aggregate({ where: { sitter_id: req.user!.id, type: 'income', settled: true, created_at: { gte: today } }, _sum: { payout: true } }),
       prisma.transaction.aggregate({ where: { sitter_id: req.user!.id, type: 'income', settled: true, created_at: { gte: weekStart } }, _sum: { payout: true } }),
       prisma.transaction.aggregate({ where: { sitter_id: req.user!.id, type: 'income', settled: true, created_at: { gte: monthStart } }, _sum: { payout: true } }),
-      prisma.transaction.aggregate({ where: { sitter_id: req.user!.id, type: 'income', settled: true }, _sum: { payout: true } }),
       prisma.transaction.count({ where: { sitter_id: req.user!.id, created_at: { gte: today } } }),
     ])
-
-    const profile = await prisma.sitterProfile.findUnique({ where: { user_id: req.user!.id } })
 
     const transactions = await prisma.transaction.findMany({
       where: { sitter_id: req.user!.id, type: 'income' },
@@ -43,10 +42,11 @@ export async function getWalletStats(req: AuthRequest, res: Response, next: Next
     }
 
     success(res, {
+      balance: profile?.balance || 0,
       todayIncome: todayTx._sum.payout || 0,
       weekIncome: weekTx._sum.payout || 0,
       monthIncome: monthTx._sum.payout || 0,
-      totalIncome: allTx._sum.payout || 0,
+      totalIncome: (profile?.balance || 0) + (todayTx._sum.payout || 0),
       todayOrders: todayCount,
       weekOrders: 0,
       monthOrders: 0,
@@ -111,15 +111,14 @@ export async function withdraw(req: AuthRequest, res: Response, next: NextFuncti
   try {
     const { amount } = req.body
 
-    const stats = await prisma.transaction.aggregate({
-      where: { sitter_id: req.user!.id, type: 'income', settled: true },
-      _sum: { payout: true },
+    const result = await prisma.sitterProfile.updateMany({
+      where: { user_id: req.user!.id, balance: { gte: amount } },
+      data: { balance: { decrement: amount } },
     })
-    const balance = stats._sum.payout || 0
-    if (amount > balance) return fail(res, 'INSUFFICIENT_BALANCE', '余额不足')
+    if (result.count === 0) return fail(res, 'INSUFFICIENT_BALANCE', '余额不足')
 
     const tx = await prisma.transaction.create({
-      data: { sitter_id: req.user!.id, type: 'withdraw', amount: -amount, commission: 0, payout: 0, settled: false },
+      data: { sitter_id: req.user!.id, type: 'withdraw', amount: -amount, commission: 0, payout: 0, settled: true },
     })
     success(res, tx, 201)
   } catch (err) { next(err) }

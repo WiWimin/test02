@@ -48,6 +48,7 @@ model SitterProfile {
   wechat        String?
   rating        Float   @default(0)
   total_orders  Int     @default(0)
+  balance       Float   @default(0)
   max_distance  Int     @default(5)
   workday_start String  @default("09:00")
   workday_end   String  @default("20:00")
@@ -66,6 +67,8 @@ model SitterProfile {
   areas    SitterArea[]
   certs    SitterCert[]
 
+  @@index([status, rating])
+  @@index([status])
   @@map("sitter_profiles")
 }
 
@@ -189,8 +192,9 @@ model Order {
   conversation Conversation?
   session     ServiceSession?
 
-  @@index([owner_id])
-  @@index([sitter_id])
+  @@index([owner_id, status])
+  @@index([sitter_id, status])
+  @@index([created_at])
   @@index([order_no])
   @@map("orders")
 }

@@ -47,7 +47,7 @@ async function main() {
     data: { account: 'S000001', phone: '13800000001', password_hash: password, name: '张阿姨', role: 'sitter', status: 'active', sitter_status: 'approved', avatar: '👩' },
   })
   const sp1 = await prisma.sitterProfile.create({
-    data: { user_id: sitter1.id, level: 3, bio: '10年宠物护理经验，温柔耐心', city: '北京', rating: 4.9, total_orders: 287, status: 'approved', online: true },
+    data: { user_id: sitter1.id, level: 3, bio: '10年宠物护理经验，温柔耐心', city: '北京', rating: 4.9, total_orders: 287, balance: 2870, status: 'approved', online: true },
   })
   await prisma.service.createMany({
     data: [
@@ -76,7 +76,7 @@ async function main() {
     data: { account: 'S000002', phone: '13800000002', password_hash: password, name: 'test_sitter2', role: 'sitter', status: 'active', sitter_status: 'approved', avatar: '🧑' },
   })
   const sp2 = await prisma.sitterProfile.create({
-    data: { user_id: sitter2.id, level: 2, bio: '热爱动物，有3年养宠经验', city: '北京', rating: 4.7, total_orders: 156, status: 'approved', online: true },
+    data: { user_id: sitter2.id, level: 2, bio: '热爱动物，有3年养宠经验', city: '北京', rating: 4.7, total_orders: 156, balance: 1560, status: 'approved', online: true },
   })
   await prisma.service.createMany({
     data: [
@@ -125,7 +125,7 @@ async function main() {
     data: { account: 'L000001', phone: '13800000005', password_hash: password, name: 'liming', role: 'sitter', status: 'active', sitter_status: 'approved', avatar: '🧑' },
   })
   const sp3 = await prisma.sitterProfile.create({
-    data: { user_id: liming.id, level: 2, bio: '专业宠物保姆，服务细心周到', city: '北京', rating: 4.8, total_orders: 89, status: 'approved', online: true },
+    data: { user_id: liming.id, level: 2, bio: '专业宠物保姆，服务细心周到', city: '北京', rating: 4.8, total_orders: 89, balance: 890, status: 'approved', online: true },
   })
   await prisma.service.createMany({
     data: [
