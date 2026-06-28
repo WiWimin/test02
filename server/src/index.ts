@@ -27,7 +27,14 @@ const io = new Server(http, {
   cors: { origin: env.CORS_ORIGIN, credentials: true },
 })
 
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }))
+const allowedOrigins = env.CORS_ORIGIN.split(',').map(s => s.trim())
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    callback(null, true)
+  },
+  credentials: true,
+}))
 app.use(express.json())
 app.use(morgan('dev'))
 
