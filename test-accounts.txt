@@ -75,5 +75,7 @@
   Server:    localhost (MSSQLSERVER)
   Database:  petcare
   Login:     petcare_user / PetCare123!
-  Windows Auth: 可用（本地管理员）
+   Windows Auth: 可用（本地管理员）
+
 =================================================================
+# PR流程测试 - 由 web 分支伙伴提交，请审核确认流程正常
