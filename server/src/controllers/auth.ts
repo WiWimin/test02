@@ -4,10 +4,70 @@ import prisma from '../utils/prisma'
 import { hashPassword, comparePassword } from '../utils/password'
 import { signToken } from '../utils/jwt'
 import { success, fail } from '../utils/response'
+import { generateCode, verifyCode, deleteCode } from '../utils/verificationCode'
+
+export async function forgotPassword(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { phone } = req.body
+
+    const user = await prisma.user.findUnique({ where: { phone } })
+    if (!user) return fail(res, 'USER_NOT_FOUND', '该手机号未注册', 404)
+
+    const { code } = generateCode(phone)
+
+    const env = process.env.NODE_ENV || 'development'
+    if (env === 'development') {
+      return success(res, { code, message: `开发环境验证码: ${code}` })
+    }
+
+    // TODO: 接入真实短信服务
+    success(res, { message: '验证码已发送' })
+  } catch (err: any) {
+    if (err.message?.includes('请')) return fail(res, 'RATE_LIMIT', err.message)
+    next(err)
+  }
+}
+
+export async function resetPassword(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { phone, code, password } = req.body
+
+    if (!verifyCode(phone, code)) return fail(res, 'INVALID_CODE', '验证码错误或已过期')
+    deleteCode(phone)
+
+    const password_hash = await hashPassword(password)
+    await prisma.user.update({ where: { phone }, data: { password_hash } })
+
+    success(res, { message: '密码重置成功' })
+  } catch (err) { next(err) }
+}
+
+export async function sendCode(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const { phone } = req.body
+
+    const { code } = generateCode(phone)
+
+    const env = process.env.NODE_ENV || 'development'
+    if (env === 'development') {
+      return success(res, { code, message: `开发环境验证码: ${code}` })
+    }
+
+    // TODO: 接入真实短信服务
+    // await smsProvider.send(phone, `您的验证码是: ${code}`)
+    success(res, { message: '验证码已发送' })
+  } catch (err: any) {
+    if (err.message?.includes('请')) return fail(res, 'RATE_LIMIT', err.message)
+    next(err)
+  }
+}
 
 export async function register(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { phone, password, name, role } = req.body
+    const { phone, password, name, role, code } = req.body
+
+    if (!verifyCode(phone, code)) return fail(res, 'INVALID_CODE', '验证码错误或已过期')
+    deleteCode(phone)
 
     const existing = await prisma.user.findUnique({ where: { phone } })
     if (existing) return fail(res, 'PHONE_EXISTS', '该手机号已注册')

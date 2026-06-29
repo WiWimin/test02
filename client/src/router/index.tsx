@@ -30,6 +30,7 @@ const OwnerMarket = React.lazy(() => import('../components/owner/OwnerMarket'))
 const OwnerOrderDetail = React.lazy(() => import('../components/owner/OwnerOrderDetail'))
 const OwnerAddresses = React.lazy(() => import('../components/owner/OwnerAddresses'))
 const RoleSelect = React.lazy(() => import('../pages/Auth/components/RoleSelect'))
+const ForgotPassword = React.lazy(() => import('../pages/Auth/ForgotPassword'))
 
 function Loading() {
   return (
@@ -53,6 +54,7 @@ export default function AppRouter() {
         <Route path="/login" element={<RoleSelect mode="login" />} />
         <Route path="/register" element={<RoleSelect mode="register" />} />
         <Route path="/auth" element={<AuthPage mode="login" />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/sitter/apply" element={<ProtectedRoute roles={['owner']}><SitterApplication /></ProtectedRoute>} />
         <Route path="/sitter" element={<ProtectedRoute roles={['sitter']}><SitterLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />

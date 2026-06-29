@@ -30,6 +30,7 @@ export async function register(params: {
   password: string
   name: string
   role: UserRole
+  code: string
 }): Promise<{ token: string; user: UserInfo }> {
   const data = await api.post<{ token: string; user: UserInfo }>('/auth/register', params)
   setToken(data.token)
@@ -68,6 +69,10 @@ export async function updateUserProfile(patch: Partial<UserInfo>): Promise<UserI
     localStorage.setItem('petcare_user', JSON.stringify(updated))
   }
   return data
+}
+
+export async function sendVerificationCode(phone: string): Promise<{ code?: string }> {
+  return api.post<{ code?: string }>('/auth/send-code', { phone })
 }
 
 export { getToken, setToken }
