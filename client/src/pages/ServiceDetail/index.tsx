@@ -4,9 +4,9 @@ import {
   ArrowLeft, Star, MapPin, ShieldCheck, Check, ChevronRight,
   Clock, Calendar, Image as ImageIcon, Phone, MessageCircle
 } from 'lucide-react'
-import { api } from '../utils/api'
-import { isLoggedIn } from '../utils/auth'
-import RegisterPrompt from './RegisterPrompt'
+import { api } from '../../utils/api'
+import { isLoggedIn } from '../../utils/auth'
+import RegisterPrompt from '../../components/RegisterPrompt'
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   const full = Math.floor(rating)

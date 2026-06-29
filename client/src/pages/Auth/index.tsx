@@ -5,7 +5,7 @@ import {
   ShieldCheck, ArrowLeft, CheckCircle2, XCircle,
   MessageCircle, Smartphone, CreditCard, User as UserIcon
 } from 'lucide-react'
-import { login, register, UserRole, getCurrentUser } from '../utils/auth'
+import { login, register, UserRole, getCurrentUser } from '../../utils/auth'
 
 const roleLabels: Record<UserRole, string> = {
   owner: '宠物主人',
