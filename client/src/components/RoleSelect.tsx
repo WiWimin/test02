@@ -40,10 +40,6 @@ export default function RoleSelect({ mode }: RoleSelectProps) {
         <div className="rs-bg-glow glow-2" />
       </div>
 
-      <button className="rs-mobile-back" onClick={() => navigate(-1)}>
-        <ArrowLeft size={20} />
-      </button>
-
       <div className="rs-container">
         <div className="rs-card">
           <div className="rs-logo">
@@ -51,7 +47,12 @@ export default function RoleSelect({ mode }: RoleSelectProps) {
             <span className="rs-logo-text">PetCare</span>
           </div>
 
-          <h1 className="rs-title">选择身份</h1>
+          <div className="rs-title-row">
+            <button className="rs-role-back" onClick={() => navigate('/')} title="返回首页">
+              <ArrowLeft size={18} />
+            </button>
+            <h1 className="rs-title">选择身份</h1>
+          </div>
           <p className="rs-subtitle">请选择您的身份以继续</p>
 
           <div className="rs-role-step">
@@ -84,13 +85,6 @@ export default function RoleSelect({ mode }: RoleSelectProps) {
           background: linear-gradient(135deg, #F8F9FB 0%, #FFF5F0 50%, #F0F8F6 100%);
           position: relative; padding: 24px 16px;
         }
-        .rs-mobile-back {
-          position: fixed; top: 16px; left: 16px; z-index: 10;
-          width: 40px; height: 40px; border-radius: var(--radius-full);
-          display: none; align-items: center; justify-content: center;
-          background: rgba(255,255,255,0.9); color: var(--color-text-secondary);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
         .rs-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
         .rs-bg-paw {
           position: absolute; opacity: 0.06;
@@ -115,6 +109,17 @@ export default function RoleSelect({ mode }: RoleSelectProps) {
           display: flex; align-items: center; justify-content: center; color: #fff;
         }
         .rs-logo-text { font-size: 20px; font-weight: 800; color: var(--color-text); letter-spacing: -0.3px; }
+        .rs-title-row { display: flex; align-items: center; gap: 10px; justify-content: center; }
+        .rs-role-back {
+          width: 36px; height: 36px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center;
+          border-radius: var(--radius-full);
+          border: 1px solid var(--color-border);
+          background: var(--auth-card-bg, #fff);
+          color: var(--color-text-secondary);
+          cursor: pointer; transition: all 0.2s ease;
+        }
+        .rs-role-back:hover { background: #f5f5f5; }
         .rs-title { text-align: center; font-size: 24px; font-weight: 700; color: var(--color-text); margin-bottom: 6px; }
         .rs-subtitle { text-align: center; font-size: 14px; color: var(--color-text-muted); margin-bottom: 24px; }
         .rs-role-step { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
@@ -147,7 +152,6 @@ export default function RoleSelect({ mode }: RoleSelectProps) {
         @media (max-width: 480px) {
           .rs-card { padding: 28px 20px 24px; border-radius: 16px; }
           .rs-title { font-size: 22px; }
-          .rs-mobile-back { display: flex; }
         }
       `}</style>
     </div>

@@ -1,10 +1,25 @@
 import { z } from 'zod'
 
+export const sendCodeSchema = z.object({
+  phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
+})
+
+export const forgotPasswordSchema = z.object({
+  phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
+})
+
+export const resetPasswordSchema = z.object({
+  phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
+  code: z.string().regex(/^\d{6}$/, '验证码为6位数字'),
+  password: z.string().min(6, '密码至少6位').max(50),
+})
+
 export const registerSchema = z.object({
   phone: z.string().regex(/^1\d{10}$/, '手机号格式不正确'),
   password: z.string().min(6, '密码至少6位').max(50),
   name: z.string().min(1, '请输入姓名').max(30),
   role: z.enum(['owner', 'sitter']),
+  code: z.string().regex(/^\d{6}$/, '验证码为6位数字'),
 })
 
 export const loginSchema = z.object({

@@ -34,6 +34,7 @@ import OwnerOrderDetail from './components/owner/OwnerOrderDetail'
 import OwnerAddresses from './components/owner/OwnerAddresses'
 import RoleSelect from './components/RoleSelect'
 import RegisterPrompt from './components/RegisterPrompt'
+import ForgotPassword from './components/ForgotPassword'
 
 function ProtectedRoute({ children, roles }: { children: JSX.Element; roles?: string[] }) {
   const token = localStorage.getItem('petcare_token')
@@ -73,6 +74,7 @@ function App() {
         <Route path="/login" element={<RoleSelect mode="login" />} />
         <Route path="/register" element={<RoleSelect mode="register" />} />
         <Route path="/auth" element={<AuthPage mode="login" />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/sitter/apply" element={<ProtectedRoute roles={['owner']}><SitterApplication /></ProtectedRoute>} />
         <Route path="/sitter" element={<ProtectedRoute roles={['sitter']}><SitterLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />

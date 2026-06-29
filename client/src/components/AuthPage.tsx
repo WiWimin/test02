@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   PawPrint, Phone, Lock, Eye, EyeOff, Loader2,
   ShieldCheck, ArrowLeft, CheckCircle2, XCircle,
   MessageCircle, Smartphone, CreditCard, User as UserIcon
 } from 'lucide-react'
-import { login, register, UserRole, getCurrentUser } from '../utils/auth'
+import { login, register, sendVerificationCode, UserRole, getCurrentUser } from '../utils/auth'
 
 const roleLabels: Record<UserRole, string> = {
   owner: '宠物主人',
@@ -17,8 +17,10 @@ interface AuthPageProps {
   mode: 'login' | 'register'
 }
 
-function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t) }, [onClose])
+function Toast({ message, type, duration = 3000, onClose }: { message: string; type: 'success' | 'error'; duration?: number; onClose: () => void }) {
+  const cb = useRef(onClose)
+  cb.current = onClose
+  useEffect(() => { const t = setTimeout(() => cb.current(), duration); return () => clearTimeout(t) }, [duration])
   return (
     <div className={`auth-toast auth-toast-${type}`}>
       {type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
@@ -107,7 +109,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
   const role: UserRole = roleParam || 'owner'
   const [mode, setMode] = useState<'login' | 'register'>(modeParam || initialMode)
   const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error'; duration?: number } | null>(null)
 
   /* Login state */
   const [loginAccount, setLoginAccount] = useState('')
@@ -214,6 +216,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
         password: regPwd,
         name: '用户' + regPhone.replace(/\s/g, '').slice(-4),
         role,
+        code: regCode,
       })
       if (result.user.account) setAssignedAccount(result.user.account)
       setToast({ msg: '注册成功！', type: 'success' })
@@ -225,16 +228,23 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
     }
   }
 
-  const sendCode = () => {
+  const sendCode = async () => {
     const raw = regPhone.replace(/\s/g, '')
     if (!/^1\d{10}$/.test(raw)) { setRegErrors(prev => ({ ...prev, phone: '请输入正确手机号' })); return }
-    setCodeCountdown(60)
-    const id = setInterval(() => {
-      setCodeCountdown(prev => {
-        if (prev <= 1) { clearInterval(id); return 0 }
-        return prev - 1
-      })
-    }, 1000)
+    try {
+      const result = await sendVerificationCode(raw)
+      if (result.code) setToast({ msg: `开发环境验证码: ${result.code}（30秒后关闭）`, type: 'success', duration: 30000 })
+      else setToast({ msg: '验证码已发送', type: 'success' })
+      setCodeCountdown(60)
+      const id = setInterval(() => {
+        setCodeCountdown(prev => {
+          if (prev <= 1) { clearInterval(id); return 0 }
+          return prev - 1
+        })
+      }, 1000)
+    } catch {
+      setToast({ msg: '发送失败，请稍后再试', type: 'error' })
+    }
   }
 
   useEffect(() => { if (modeParam) setMode(modeParam); else setMode(initialMode) }, [initialMode, modeParam])
@@ -339,7 +349,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
                   <span>记住我</span>
                 </label>
               )}
-              <button type="button" className="auth-link" onClick={() => alert('忘记密码功能')}>忘记密码？</button>
+              <button type="button" className="auth-link" onClick={() => navigate('/forgot-password')}>忘记密码？</button>
             </div>
 
             <button type="submit" className={`auth-submit ${loading ? 'loading' : ''}`} disabled={loading}>
@@ -442,7 +452,7 @@ export default function AuthPage({ mode: initialMode }: AuthPageProps) {
         </div>
       </div>
 
-      {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && <Toast message={toast.msg} type={toast.type} duration={toast.duration} onClose={() => setToast(null)} />}
 
       <style>{`
         .auth-page {
